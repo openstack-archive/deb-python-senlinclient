@@ -1,0 +1,5 @@
+python-senlinclient (0.1.8-1) unstable; urgency=medium
+
+  * Initial release. (Closes: #807405)
+
+ -- Thomas Goirand <zigo@debian.org>  Tue, 08 Dec 2015 14:28:25 +0100
