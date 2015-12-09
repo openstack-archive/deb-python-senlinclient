@@ -19,7 +19,9 @@ override_dh_auto_install:
 		python$$pyvers setup.py install --install-layout=deb \
 			--root $(CURDIR)/debian/python3-senlinclient; \
 	done
-	rm -rf $(CURDIR)/debian/python*-python-senlinclient/usr/lib/python*/dist-packages/*.pth
+	rm -rf $(CURDIR)/debian/python*-senlinclient/usr/lib/python*/dist-packages/*.pth
+	mv $(CURDIR)/debian/python-senlinclient/usr/bin/senlin $(CURDIR)/debian/python-senlinclient/usr/bin/python2-senlin
+	mv $(CURDIR)/debian/python3-senlinclient/usr/bin/senlin $(CURDIR)/debian/python3-senlinclient/usr/bin/python3-senlin
 
 override_dh_python3:
 	dh_python3 --shebang=/usr/bin/python3
