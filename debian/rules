@@ -21,6 +21,9 @@ override_dh_auto_install:
 	done
 	rm -rf $(CURDIR)/debian/python*-python-senlinclient/usr/lib/python*/dist-packages/*.pth
 
+override_dh_python3:
+	dh_python3 --shebang=/usr/bin/python3
+
 override_dh_auto_test:
 ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
 	@echo "===> Running tests"
