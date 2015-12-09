@@ -81,7 +81,7 @@ Description: OpenStack Clustering API Client Library - Python 2.7
  .
  This package contains the Python 2.7 module.
 
-Package: python3-python-senlinclient
+Package: python3-senlinclient
 Architecture: all
 Depends: python3-babel,
          python3-heatclient (>= 0.6.0),
@@ -104,7 +104,7 @@ Description: OpenStack Clustering API Client Library - Python 3.x
  .
  This package contains the Python 3.x module.
 
-Package: python-python-senlinclient-doc
+Package: python-senlinclient-doc
 Section: doc
 Architecture: all
 Depends: ${misc:Depends},

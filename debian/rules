@@ -13,11 +13,11 @@ export OSLO_PACKAGE_VERSION=$(shell dpkg-parsechangelog | grep Version: | cut -d
 override_dh_auto_install:
 	set -e ; for pyvers in $(PYTHONS); do \
 		python$$pyvers setup.py install --install-layout=deb \
-			--root $(CURDIR)/debian/python-python-senlinclient; \
+			--root $(CURDIR)/debian/python-senlinclient; \
 	done
 	set -e ; for pyvers in $(PYTHON3S); do \
 		python$$pyvers setup.py install --install-layout=deb \
-			--root $(CURDIR)/debian/python3-python-senlinclient; \
+			--root $(CURDIR)/debian/python3-senlinclient; \
 	done
 	rm -rf $(CURDIR)/debian/python*-python-senlinclient/usr/lib/python*/dist-packages/*.pth
 
@@ -42,7 +42,7 @@ endif
 
 override_dh_sphinxdoc:
 ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
-	sphinx-build -b html doc/source debian/python-python-senlinclient-doc/usr/share/doc/python-python-senlinclient-doc/html
+	sphinx-build -b html doc/source debian/python-senlinclient-doc/usr/share/doc/python-senlinclient-doc/html
 	dh_sphinxdoc -O--buildsystem=python_distutils
 endif
 

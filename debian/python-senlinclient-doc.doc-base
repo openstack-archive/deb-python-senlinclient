@@ -5,5 +5,5 @@ Abstract: Sphinx documentation for python-senlinclient
 Section: Programming/Python
 
 Format: HTML
-Index: /usr/share/doc/python-python-senlinclient-doc/html/index.html
-Files: /usr/share/doc/python-python-senlinclient-doc/html/*
+Index: /usr/share/doc/python-senlinclient-doc/html/index.html
+Files: /usr/share/doc/python-senlinclient-doc/html/*
