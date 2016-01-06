@@ -10,6 +10,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from keystoneauth1.exceptions import base as kae_base
+from keystoneauth1.exceptions import http as kae_http
 from openstack import exceptions as sdkexc
 
 from oslo_serialization import jsonutils
@@ -22,7 +24,7 @@ verbose = False
 
 
 class BaseException(Exception):
-    '''An error occurred.'''
+    """An error occurred."""
     def __init__(self, message=None):
         self.message = message
 
@@ -31,11 +33,11 @@ class BaseException(Exception):
 
 
 class CommandError(BaseException):
-    '''Invalid usage of CLI.'''
+    """Invalid usage of CLI."""
 
 
 class FileFormatError(BaseException):
-    '''Illegal file format detected.'''
+    """Illegal file format detected."""
 
 
 class HTTPException(BaseException):
@@ -226,10 +228,10 @@ _EXCEPTION_MAP = {
 
 
 def parse_exception(exc):
-    '''Parse exception code and yield useful information.
+    """Parse exception code and yield useful information.
 
     :param details: details of the exception.
-    '''
+    """
     if isinstance(exc, sdkexc.HttpException):
         try:
             record = jsonutils.loads(exc.details)
@@ -243,16 +245,32 @@ def parse_exception(exc):
             }
     elif isinstance(exc, reqexc.RequestException):
         # Exceptions that are not captured by SDK
-        code = exc.message[1].errno
         record = {
             'error': {
-                'code': code,
+                'code': exc.message[1].errno,
                 'message': exc.message[0],
             }
         }
 
     elif isinstance(exc, six.string_types):
         record = jsonutils.loads(exc)
+    # some exception from keystoneauth1 is not shaped by SDK
+    elif isinstance(exc, kae_http.HttpError):
+        record = {
+            'error': {
+                'code': exc.http_status,
+                'message': exc.message
+            }
+        }
+    elif isinstance(exc, kae_base.ClientException):
+        record = {
+            'error': {
+                # other exceptions from keystoneauth1 is an internal
+                # error to senlin, so set status code to 500
+                'code': 500,
+                'message': exc.message
+            }
+        }
     else:
         print(_('Unknown exception: %s') % exc)
         return

@@ -31,216 +31,6 @@ class Version(resource.Resource):
     status = resource.prop('status')
 
 
-class BuildInfo(resource.Resource):
-    base_path = '/build-info'
-    service = cluster_service.ClusterService()
-
-    # Capabilities
-    allow_retrieve = True
-
-    # Properties
-    api = resource.prop('api')
-    engine = resource.prop('engine')
-
-
-class ProfileType(resource.Resource):
-    resource_key = None
-    resources_key = 'profile_types'
-    base_path = '/profile-types'
-    service = cluster_service.ClusterService()
-
-    # Capabilities
-    allow_list = True
-    allow_retrieve = True
-
-    # Properties
-    name = resource.prop('name')
-
-
-class ProfileTypeSchema(resource.Resource):
-    base_path = '/profile-types/%(profile_type)s'
-    service = cluster_service.ClusterService()
-
-    # Capabilities
-    allow_retrieve = True
-
-    # Properties
-    schema = resource.prop('schema', type=dict)
-
-
-class ProfileTypeTemplate(resource.Resource):
-    resource_key = 'template'
-    base_path = '/profile-types/%(profile_type)s/template'
-    service = cluster_service.ClusterService()
-
-    # Capabilities
-    allow_retrieve = True
-
-    # Properties
-    template = resource.prop('template', type=dict)
-
-
-class Profile(resource.Resource):
-    resource_key = 'profile'
-    resources_key = 'profiles'
-    base_path = '/profiles'
-    service = cluster_service.ClusterService()
-
-    # capabilities
-    allow_create = True
-    allow_retrieve = True
-    allow_update = True
-    allow_delete = True
-    allow_list = True
-    patch_update = True
-
-    # properties
-    id = resource.prop('id')
-    name = resource.prop('name')
-    type = resource.prop('type')
-    spec = resource.prop('spec', type=dict)
-    permission = resource.prop('permission')
-    metadata = resource.prop('metadata', type=dict)
-    created_time = resource.prop('created_time')
-    deleted_time = resource.prop('deleted_time')
-
-    def to_dict(self):
-        pb_dict = {
-            'id': self.id,
-            'name': self.name,
-            'type': self.type,
-            'permission': self.permission,
-            'spec': self.spec,
-            'metadata': self.metadata,
-            'created_time': self.created_time,
-            'deleted_time': self.deleted_time,
-        }
-        return pb_dict
-
-
-class PolicyType(resource.Resource):
-    resources_key = 'policy_types'
-    base_path = '/policy-types'
-    service = cluster_service.ClusterService()
-
-    # Capabilities
-    allow_list = True
-    allow_retrieve = True
-
-    # Properties
-    name = resource.prop('name')
-
-
-class PolicyTypeSchema(resource.Resource):
-    base_path = '/policy-types/%(policy_type)s'
-    service = cluster_service.ClusterService()
-
-    # Capabilities
-    allow_retrieve = True
-
-    # Properties
-    schema = resource.prop('schema', type=dict)
-
-
-class PolicyTypeTemplate(resource.Resource):
-    resource_key = 'template'
-    base_path = '/policy-types/%(policy_type)s/template'
-    service = cluster_service.ClusterService()
-
-    # Capabilities
-    allow_retrieve = True
-
-    # Properties
-    template = resource.prop('template', type=dict)
-
-
-class Policy(resource.Resource):
-    resource_key = 'policy'
-    resources_key = 'policies'
-    base_path = '/policies'
-    service = cluster_service.ClusterService()
-
-    # Capabilities
-    allow_list = True
-    allow_retrieve = True
-    allow_create = True
-    allow_delete = True
-    allow_update = True
-    patch_update = True
-
-    # Properties
-    id = resource.prop('id')
-    name = resource.prop('name')
-    type = resource.prop('type')
-    cooldown = resource.prop('cooldown')
-    level = resource.prop('level', type=int)
-    created_time = resource.prop('created_time')
-    updated_time = resource.prop('updated_time')
-    deleted_time = resource.prop('deleted_time')
-    spec = resource.prop('spec', type=dict)
-    data = resource.prop('data', type=dict)
-
-    def to_dict(self):
-        pb_dict = {
-            'id': self.id,
-            'name': self.name,
-            'type': self.type,
-            'spec': self.spec,
-            'level': self.level,
-            'cooldown': self.cooldown,
-            'created_time': self.created_time,
-            'updated_time': self.updated_time,
-            'deleted_time': self.deleted_time,
-        }
-        return pb_dict
-
-
-class Webhook(resource.Resource):
-    resource_key = 'webhook'
-    resources_key = 'webhooks'
-    base_path = '/webhooks'
-    service = cluster_service.ClusterService()
-
-    # Capabilities
-    allow_list = True
-    allow_retrieve = True
-    allow_create = True
-    allow_delete = True
-
-    # Properties
-    id = resource.prop('id')
-    user = resource.prop('user')
-    domain = resource.prop('domain')
-    project = resource.prop('project')
-    name = resource.prop('name')
-    obj_type = resource.prop('obj_type')
-    obj_id = resource.prop('obj_id')
-    action = resource.prop('action')
-    created_time = resource.prop('created_time')
-    deleted_time = resource.prop('deleted_time')
-    credential = resource.prop('credential')
-    params = resource.prop('params', type=dict)
-    url = resource.prop('url')
-
-    def to_dict(self):
-        webhook_dict = {
-            'id': self.id,
-            'user': self.user,
-            'domain': self.domain,
-            'project': self.project,
-            'name': self.name,
-            'obj_type': self.obj_type,
-            'obj_id': self.obj_id,
-            'action': self.action,
-            'credential': self.credential,
-            'params': self.params,
-            'created_time': self.created_time,
-            'deleted_time': self.deleted_time,
-            'url': self.url,
-        }
-        return webhook_dict
-
-
 class Cluster(resource.Resource):
     resource_key = 'cluster'
     resources_key = 'clusters'
@@ -263,9 +53,8 @@ class Cluster(resource.Resource):
     project = resource.prop('project')
     domain = resource.prop('domain')
     parent = resource.prop('parent')
-    created_time = resource.prop('created_time')
-    updated_time = resource.prop('updated_time')
-    deleted_time = resource.prop('deleted_time')
+    created_at = resource.prop('created_at')
+    updated_at = resource.prop('updated_at')
     min_size = resource.prop('min_size', type=int)
     max_size = resource.prop('max_size', type=int)
     desired_capacity = resource.prop('desired_capacity', type=int)
@@ -281,8 +70,8 @@ class Cluster(resource.Resource):
     # action = resource.prop('action')
 
     def action(self, session, body):
-        url = utils.urljoin(self.base_path, self.id, 'action')
-        resp = session.put(url, endpoint_filter=self.service, json=body)
+        url = utils.urljoin(self.base_path, self.id, 'actions')
+        resp = session.post(url, endpoint_filter=self.service, json=body)
         return resp.json()
 
     def add_nodes(self, session, nodes):
@@ -398,9 +187,8 @@ class Cluster(resource.Resource):
             'project': self.project,
             'domain': self.domain,
             'parent': self.parent,
-            'created_time': self.created_time,
-            'updated_time': self.updated_time,
-            'deleted_time': self.deleted_time,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at,
             'min_size': self.min_size,
             'max_size': self.max_size,
             'desired_capacity': self.desired_capacity,
@@ -452,22 +240,6 @@ class ClusterPolicy(resource.Resource):
         return info
 
 
-class ClusterNode(resource.Resource):
-    resources_key = 'nodes'
-    base_path = '/clusters/%(cluster_id)s/nodes'
-    service = cluster_service.ClusterService()
-
-    # Capabilities
-    allow_list = True
-    allow_create = True
-    allow_delete = True
-
-    # Properties
-    id = resource.prop('id')
-    cluster_id = resource.prop('cluster_id')
-    policy_id = resource.prop('node_id')
-
-
 class Node(resource.Resource):
     resource_key = 'node'
     resources_key = 'nodes'
@@ -492,10 +264,9 @@ class Node(resource.Resource):
     profile_name = resource.prop('profile_name')
     index = resource.prop('index', type=int)
     role = resource.prop('role')
-    init_time = resource.prop('init_time')
-    created_time = resource.prop('created_time')
-    updated_time = resource.prop('updated_time')
-    deleted_time = resource.prop('deleted_time')
+    init_at = resource.prop('init_at')
+    created_at = resource.prop('created_at')
+    updated_at = resource.prop('updated_at')
     status = resource.prop('status')
     status_reason = resource.prop('status_reason')
     metadata = resource.prop('metadata', type=dict)
@@ -503,8 +274,8 @@ class Node(resource.Resource):
     details = resource.prop('details', type=dict)
 
     def action(self, session, body):
-        url = utils.urljoin(self.base_path, self.id, 'action')
-        resp = session.put(url, endpoint_filter=self.service, json=body)
+        url = utils.urljoin(self.base_path, self.id, 'actions')
+        resp = session.post(url, endpoint_filter=self.service, json=body)
         return resp.json()
 
     def join(self, session, cluster_id):
@@ -532,42 +303,15 @@ class Node(resource.Resource):
             'project': self.project,
             'index': self.index,
             'role': self.role,
-            'init_time': self.init_time,
-            'created_time': self.created_time,
-            'updated_time': self.updated_time,
-            'deleted_time': self.deleted_time,
+            'init_at': self.init_at,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at,
             'status': self.status,
             'status_reason': self.status_reason,
             'metadata': self.metadata,
             'data': self.data,
             'details': self.details,
         }
-
-
-class Trigger(resource.Resource):
-    resource_key = 'trigger'
-    resources_key = 'triggers'
-    base_path = '/triggers'
-    service = cluster_service.ClusterService()
-
-    # capabilities
-    allow_create = True
-    allow_retrieve = True
-    # allow_update = True
-    allow_delete = True
-    allow_list = True
-    # patch_update = True
-
-    # properties
-    id = resource.prop('id')
-    name = resource.prop('name')
-    type = resource.prop('type')
-    spec = resource.prop('spec', type=dict)
-    state = resource.prop('state')
-    enabled = resource.prop('enabled')
-    severity = resource.prop('severity')
-    created_time = resource.prop('created_time')
-    deleted_time = resource.prop('deleted_time')
 
 
 class Action(resource.Resource):
@@ -618,6 +362,33 @@ class Action(resource.Resource):
             'depended_by': self.depended_by,
         }
         return action_dict
+
+
+class Receiver(resource.Resource):
+    resource_key = 'receiver'
+    resources_key = 'receivers'
+    base_path = '/receivers'
+    service = cluster_service.ClusterService()
+
+    # Capabilities
+    allow_list = True
+    allow_retrieve = True
+    allow_create = True
+    allow_delete = True
+
+    # Properties
+    id = resource.prop('id')
+    user = resource.prop('user')
+    project = resource.prop('project')
+    domain = resource.prop('domain')
+    name = resource.prop('name')
+    type = resource.prop('type')
+    cluster_id = resource.prop('cluster_id')
+    action = resource.prop('action')
+    created_at = resource.prop('created_at')
+    actor = resource.prop('actor', type=dict)
+    params = resource.prop('params', type=dict)
+    channel = resource.prop('channel', type=dict)
 
 
 class Event(resource.Resource):

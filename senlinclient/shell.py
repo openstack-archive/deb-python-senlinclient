@@ -82,10 +82,10 @@ class SenlinShell(object):
             self.subcommands[command] = subparser
 
     def do_bash_completion(self, args):
-        '''Prints all of the commands and options to stdout.
+        """Prints all of the commands and options to stdout.
 
         The senlin.bash_completion script doesn't have to hard code them.
-        '''
+        """
         commands = set()
         options = set()
         for sc_str, sc in self.subcommands.items():
@@ -214,7 +214,7 @@ class SenlinShell(object):
                 raise exc.CommandError(msg)
 
     def _setup_senlin_client(self, api_ver, args):
-        '''Create senlin client using given args.'''
+        """Create senlin client using given args."""
         kwargs = {
             'auth_plugin': args.auth_plugin or 'password',
             'auth_url': args.auth_url,
@@ -291,7 +291,7 @@ class SenlinShell(object):
         if profile:
             osprofiler_profiler.init(options.profile)
 
-        args.func(sc, args)
+        args.func(sc.service, args)
 
         if profile:
             trace_id = osprofiler_profiler.get().get_base_id()
