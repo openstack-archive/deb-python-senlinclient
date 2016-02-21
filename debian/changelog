@@ -1,6 +1,7 @@
 python-senlinclient (0.3.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * d/control: Align requirements with upstream, add git for sphinx.
 
  -- David Della Vecchia <ddv@canonical.com>  Sun, 21 Feb 2016 15:28:45 -0500
 
