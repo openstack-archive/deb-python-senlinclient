@@ -26,6 +26,9 @@ class Client(object):
     # useless when OpenStackSDK has been adopted all senlin resources.
     ######################################################################
 
+    def profile_types(self, **query):
+        return self.service.profile_types(**query)
+
     def get_profile_type(self, profile_type):
         return self.service.get_profile_type(profile_type)
 
@@ -96,10 +99,10 @@ class Client(object):
         return self.service.cluster_scale_in(cluster, count)
 
     def cluster_policies(self, cluster, **queries):
-        return self.service_policies(cluster, **queries)
+        return self.service.cluster_policies(cluster, **queries)
 
     def get_cluster_policy(self, policy, cluster):
-        return self.conn.get_cluster_policy(policy, cluster)
+        return self.service.get_cluster_policy(policy, cluster)
 
     def cluster_attach_policy(self, cluster, policy, **attrs):
         return self.service.cluster_attach_policy(cluster, policy, **attrs)
@@ -110,32 +113,20 @@ class Client(object):
     def cluster_update_policy(self, cluster, policy, **attrs):
         return self.service.cluster_update_policy(cluster, policy, **attrs)
 
-    def cluster_enable_policy(self, cluster, policy):
-        return self.service.cluster_enable_policy(cluster, policy)
-
-    def cluster_disable_policy(self, cluster, policy):
-        return self.service.cluster_disable_policy(cluster, policy)
-
     def nodes(self, **queries):
         return self.service.nodes(**queries)
 
     def create_node(self, **attrs):
         return self.service.create_node(**attrs)
 
-    def get_node(self, node, show_details=False):
-        return self.service.get_node(node)
+    def get_node(self, node, args=None):
+        return self.service.get_node(node, args=args)
 
     def update_node(self, node, **attrs):
         return self.service.update_node(node, **attrs)
 
     def delete_node(self, node, ignore_missing=True):
         return self.service.delete_node(node, ignore_missing)
-
-    def node_join(self, node, cluster):
-        return self.service.node_join(node, cluster)
-
-    def node_leave(self, node):
-        return self.service.node_leave(node)
 
     def receivers(self, **queries):
         return self.service.receivers(**queries)

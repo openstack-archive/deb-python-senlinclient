@@ -112,6 +112,8 @@ class ShellTest(testtools.TestCase):
         args = {
             'limit': 20,
             'marker': 'mark_id',
+            'sort': 'key:dir',
+            'global_project': True,
         }
         queries = copy.deepcopy(args)
         formatters = {}
@@ -119,6 +121,11 @@ class ShellTest(testtools.TestCase):
         args.full_id = True
         sh.do_profile_list(service, args)
         service.profiles.assert_called_once_with(**queries)
+        mock_print.assert_called_with(profiles, fields, formatters=formatters,
+                                      sortby_index=None)
+
+        args.sort = None
+        sh.do_profile_list(service, args)
         mock_print.assert_called_with(profiles, fields, formatters=formatters,
                                       sortby_index=1)
 
@@ -172,7 +179,6 @@ class ShellTest(testtools.TestCase):
         params = {
             'name': 'stack_spec',
             'spec': spec,
-            'permission': 'ok',
             'metadata': {'user': 'demo'},
         }
         service = mock.Mock()
@@ -240,7 +246,6 @@ class ShellTest(testtools.TestCase):
         service.get_profile.assert_called_once_with('FAKE_ID')
         params = {
             'name': 'stack_spec',
-            'permission': 'ok',
             'metadata': {'user': 'demo'},
         }
         service.update_profile.assert_called_once_with(profile_id, **params)
@@ -333,8 +338,7 @@ class ShellTest(testtools.TestCase):
         params = {
             'limit': 10,
             'marker': 'fake_id',
-            'sort_keys': 'name',
-            'sort_dir': 'asc',
+            'sort': 'key:dir',
             'filters': ['filter_key=filter_value'],
             'global_project': False,
             'full_id': False,
@@ -365,7 +369,7 @@ class ShellTest(testtools.TestCase):
                                       sortby_index=None)
 
         # default sorting
-        args.sort_keys = None
+        args.sort = None
         sh.do_receiver_list(service, args)
         mock_print.assert_called_with(receivers, fields,
                                       formatters={},
@@ -457,23 +461,32 @@ class ShellTest(testtools.TestCase):
     @mock.patch.object(utils, 'print_list')
     def test_do_policy_list(self, mock_print):
         service = mock.Mock()
-        fields = ['id', 'name', 'type', 'level', 'cooldown', 'created_at']
+        fields = ['id', 'name', 'type', 'created_at']
         args = {
             'limit': 20,
             'marker': 'fake_id',
+            'sort': 'name',
+            'global_project': False,
             'full_id': True
         }
         args = self._make_args(args)
         queries = {
             'limit': 20,
-            'marker':
-            'fake_id',
+            'marker': 'fake_id',
+            'sort': 'name',
+            'global_project': False,
         }
         policies = mock.Mock()
         service.policies.return_value = policies
         formatters = {}
         sh.do_policy_list(service, args)
         service.policies.assert_called_once_with(**queries)
+        mock_print.assert_called_once_with(
+            policies, fields, formatters=formatters, sortby_index=None)
+        mock_print.reset_mock()
+
+        args.sort = None
+        sh.do_policy_list(service, args)
         mock_print.assert_called_once_with(
             policies, fields, formatters=formatters, sortby_index=1)
 
@@ -512,15 +525,11 @@ class ShellTest(testtools.TestCase):
         args = {
             'name': 'new_policy',
             'spec_file': 'policy_file',
-            'cooldown': 20,
-            'enforcement_level': 50
         }
         args = self._make_args(args)
         attrs = {
             'name': 'new_policy',
             'spec': spec,
-            'cooldown': 20,
-            'level': 50
         }
         policy = mock.Mock()
         policy.id = 'policy_id'
@@ -543,16 +552,11 @@ class ShellTest(testtools.TestCase):
         service = mock.Mock()
         args = {
             'name': 'deletion_policy',
-            'cooldown': 10,
-            'enforcement_level': 50,
             'id': 'policy_id',
         }
         args = self._make_args(args)
         params = {
             'name': 'deletion_policy',
-            'cooldown': 10,
-            'level': 50,
-            'id': 'policy_id'
         }
         policy = mock.Mock()
         service.get_policy.return_value = policy
@@ -560,7 +564,7 @@ class ShellTest(testtools.TestCase):
         sh.do_policy_update(service, args)
         service.get_policy.assert_called_once_with('policy_id')
         service.update_policy.assert_called_once_with(
-            'policy_id', params)
+            'policy_id', **params)
         mock_show(service, policy_id=policy.id)
 
     def test_do_policy_delete(self):
@@ -589,8 +593,7 @@ class ShellTest(testtools.TestCase):
         args = {
             'limit': 20,
             'marker': 'fake_id',
-            'sort_keys': 'name',
-            'sort_dir': 'asc',
+            'sort': 'key:dir',
             'show_nested': True,
             'global_project': False,
             'filters': ['status=ACTIVE'],
@@ -608,12 +611,10 @@ class ShellTest(testtools.TestCase):
         mock_print.assert_called_once_with(clusters, fields,
                                            formatters=formatters,
                                            sortby_index=None)
-
-        # invalid sort key
-        args.sort_keys = 'id'
-        ex = exc.CommandError
-        ex = self.assertRaises(ex, sh.do_cluster_list, service, args)
-        self.assertEqual(_('Invalid sorting key: id'), six.text_type(ex))
+        args.sort = None
+        sh.do_cluster_list(service, args)
+        mock_print.assert_called_with(clusters, fields,
+                                      formatters={}, sortby_index=3)
 
     @mock.patch.object(utils, 'print_dict')
     def test_show_cluster(self, mock_print):
@@ -944,20 +945,17 @@ class ShellTest(testtools.TestCase):
 
     @mock.patch.object(utils, 'print_list')
     def test_do_cluster_policy_list(self, mock_print):
-        fields = ['policy_id', 'policy_name', 'policy_type', 'priority',
-                  'level', 'cooldown', 'enabled']
+        fields = ['policy_id', 'policy_name', 'policy_type', 'enabled']
         service = mock.Mock()
         args = {
             'id': 'C1',
             'filters': ['enabled=True'],
-            'sort_keys': 'level',
-            'sort_dir': 'asc',
+            'sort': 'enabled:asc',
             'full_id': True,
         }
         args = self._make_args(args)
         queries = {
-            'sort_keys': 'level',
-            'sort_dir': 'asc',
+            'sort': 'enabled:asc',
             'enabled': 'True',
         }
         cluster = mock.Mock()
@@ -972,13 +970,6 @@ class ShellTest(testtools.TestCase):
         mock_print.assert_called_once_with(policies, fields,
                                            formatters=formatters,
                                            sortby_index=None)
-        # wrong sort_key
-        args.sort_keys = 'level;BADKEY'
-        ex = self.assertRaises(exc.CommandError,
-                               sh.do_cluster_policy_list,
-                               service, args)
-        msg = _('Invalid sorting key: BADKEY')
-        self.assertEqual(msg, six.text_type(ex))
 
     @mock.patch.object(utils, 'print_dict')
     def test_do_cluster_policy_show(self, mock_print):
@@ -1003,16 +994,10 @@ class ShellTest(testtools.TestCase):
         args = {
             'id': 'C1',
             'policy': 'P1',
-            'priority': 50,
-            'enforcement_level': 60,
-            'cooldown': 120,
             'enabled': 'True',
         }
         args = self._make_args(args)
         kwargs = {
-            'priority': 50,
-            'level': 60,
-            'cooldown': 120,
             'enabled': 'True',
         }
         service.cluster_attach_policy.return_value = {'action': 'action_id'}
@@ -1037,17 +1022,11 @@ class ShellTest(testtools.TestCase):
         args = {
             'id': 'C1',
             'policy': 'policy1',
-            'priority': 50,
-            'enforcement_level': 60,
-            'cooldown': 120,
             'enabled': 'True',
         }
         args = self._make_args(args)
         kwargs = {
             'policy_id': 'policy1',
-            'priority': 50,
-            'level': 60,
-            'cooldown': 120,
             'enabled': 'True',
         }
         service.cluster_update_policy.return_value = {'action': 'action_id'}
@@ -1056,30 +1035,6 @@ class ShellTest(testtools.TestCase):
 
         service.cluster_update_policy.assert_called_once_with('C1', **kwargs)
 
-    def test_do_cluster_policy_enable(self):
-        args = {
-            'id': 'CC',
-            'policy': 'PP'
-        }
-        args = self._make_args(args)
-        service = mock.Mock()
-        resp = {'action': 'action_id'}
-        service.cluster_enable_policy.return_value = resp
-        sh.do_cluster_policy_enable(service, args)
-        service.cluster_enable_policy.assert_called_once_with('CC', 'PP')
-
-    def test_do_cluster_policy_disable(self):
-        args = {
-            'id': 'CC',
-            'policy': 'PP'
-        }
-        args = self._make_args(args)
-        service = mock.Mock()
-        resp = {'action': 'action_id'}
-        service.cluster_disable_policy.return_value = resp
-        sh.do_cluster_policy_disable(service, args)
-        service.cluster_disable_policy.assert_called_once_with('CC', 'PP')
-
     @mock.patch.object(utils, 'print_list')
     def test_do_node_list(self, mock_print):
         service = mock.Mock()
@@ -1087,8 +1042,7 @@ class ShellTest(testtools.TestCase):
                   'profile_name', 'created_at', 'updated_at']
         args = {
             'cluster': 'cluster1',
-            'sort_keys': 'name',
-            'sort_dir': 'asc',
+            'sort': 'name:asc',
             'limit': 20,
             'marker': 'marker_id',
             'global_project': True,
@@ -1097,8 +1051,7 @@ class ShellTest(testtools.TestCase):
         }
         queries = {
             'cluster_id': 'cluster1',
-            'sort_keys': 'name',
-            'sort_dir': 'asc',
+            'sort': 'name:asc',
             'limit': 20,
             'marker': 'marker_id',
             'global_project': True,
@@ -1113,13 +1066,6 @@ class ShellTest(testtools.TestCase):
                                            formatters=formatters,
                                            sortby_index=None)
         service.nodes.assert_called_once_with(**queries)
-
-        # wrong sort key
-        args.sort_keys = 'name;BADKEY'
-        ex = exc.CommandError
-        ex = self.assertRaises(ex, sh.do_node_list, service, args)
-        msg = _('Invalid sorting key: BADKEY')
-        self.assertEqual(msg, six.text_type(ex))
 
     @mock.patch.object(utils, 'print_dict')
     @mock.patch.object(utils, 'nested_dict_formatter')
@@ -1137,7 +1083,7 @@ class ShellTest(testtools.TestCase):
 
         sh._show_node(service, node_id, show_details=False)
 
-        service.get_node.assert_called_once_with(node_id)
+        service.get_node.assert_called_once_with(node_id, args=None)
         mock_print.assert_called_once_with(data, formatters=formatters)
 
     @mock.patch.object(sh, '_show_node')
@@ -1221,41 +1167,13 @@ class ShellTest(testtools.TestCase):
         service.update_node.assert_called_once_with('node_id', **attrs)
         mock_show.assert_called_once_with(service, 'node_id')
 
-    @mock.patch.object(sh, '_show_node')
-    def test_do_node_join(self, mock_show):
-        service = mock.Mock()
-        args = {
-            'id': 'node1',
-            'cluster': 'cluster1'
-        }
-        args = self._make_args(args)
-        resp = {'action': 'action_id'}
-        service.node_join.return_value = resp
-        sh.do_node_join(service, args)
-        service.node_join.assert_called_once_with('node1', 'cluster1')
-        mock_show.assert_called_once_with(service, 'node1')
-
-    @mock.patch.object(sh, '_show_node')
-    def test_do_node_leave(self, mock_show):
-        service = mock.Mock()
-        args = {
-            'id': 'node1',
-        }
-        args = self._make_args(args)
-        resp = {'action': 'action_id'}
-        service.node_leave.return_value = resp
-        sh.do_node_leave(service, args)
-        service.node_leave.assert_called_once_with('node1')
-        mock_show.assert_called_once_with(service, 'node1')
-
     @mock.patch.object(utils, 'print_list')
     def test_do_event_list(self, mock_print):
         service = mock.Mock()
         fields = ['id', 'timestamp', 'obj_type', 'obj_id', 'obj_name',
                   'action', 'status', 'status_reason', 'level']
         args = {
-            'sort_keys': 'timestamp',
-            'sort_dir': 'asc',
+            'sort': 'timestamp:asc',
             'limit': 20,
             'marker': 'marker_id',
             'global_project': True,
@@ -1278,13 +1196,6 @@ class ShellTest(testtools.TestCase):
         mock_print.assert_called_once_with(events, fields,
                                            formatters=formatters,
                                            sortby_index=sortby_index)
-        # invalid sorting key
-        args.sort_keys = 'wrong_key'
-        ex = self.assertRaises(exc.CommandError,
-                               sh.do_event_list,
-                               service, args)
-        msg = _('Invalid sorting key: wrong_key')
-        self.assertEqual(msg, six.text_type(ex))
 
     @mock.patch.object(utils, 'print_dict')
     def test_do_event_show(self, mock_print):
@@ -1320,8 +1231,7 @@ class ShellTest(testtools.TestCase):
         fields = ['id', 'name', 'action', 'status', 'target', 'depends_on',
                   'depended_by', 'created_at']
         args = {
-            'sort_keys': 'status',
-            'sort_dir': 'asc',
+            'sort': 'status',
             'limit': 20,
             'marker': 'marker_id',
         }
@@ -1342,22 +1252,6 @@ class ShellTest(testtools.TestCase):
         mock_print.assert_called_once_with(actions, fields,
                                            formatters=formatters,
                                            sortby_index=sortby_index)
-
-    def test_do_action_list_invalid_sorting_key(self):
-        service = mock.Mock()
-        args = {
-            'sort_keys': 'BOGUS',
-            'sort_dir': 'asc',
-            'limit': 20,
-            'marker': 'marker_id',
-            'filters': ['status=ACTIVE']
-        }
-        args = self._make_args(args)
-
-        ex = self.assertRaises(exc.CommandError, sh.do_action_list,
-                               service, args)
-        msg = _('Invalid sorting key: BOGUS')
-        self.assertEqual(msg, six.text_type(ex))
 
     @mock.patch.object(utils, 'print_dict')
     def test_do_action_show(self, mock_print):

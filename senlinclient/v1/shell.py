@@ -76,6 +76,14 @@ def do_profile_type_show(service, args):
            help=_('Limit the number of profiles returned.'))
 @utils.arg('-m', '--marker', metavar='<ID>',
            help=_('Only return profiles that appear after the given ID.'))
+@utils.arg('-o', '--sort', metavar='<KEY:DIR>',
+           help=_('Sorting option which is a string containing a list of keys '
+                  'separated by commas. Each key can be optionally appened by '
+                  'a sort direction (:asc or :desc)'))
+@utils.arg('-g', '--global-project', default=False, action="store_true",
+           help=_('Indicate that the list should include profiles from'
+                  ' all projects. This option is subject to access policy '
+                  'checking. Default is False.'))
 @utils.arg('-F', '--full-id', default=False, action="store_true",
            help=_('Print full IDs in list.'))
 def do_profile_list(service, args=None):
@@ -84,7 +92,11 @@ def do_profile_list(service, args=None):
     queries = {
         'limit': args.limit,
         'marker': args.marker,
+        'sort': args.sort,
+        'global_project': args.global_project,
     }
+
+    sortby_index = None if args.sort else 1
 
     profiles = service.profiles(**queries)
     formatters = {}
@@ -92,7 +104,8 @@ def do_profile_list(service, args=None):
         formatters = {
             'id': lambda x: x.id[:8],
         }
-    utils.print_list(profiles, fields, formatters=formatters, sortby_index=1)
+    utils.print_list(profiles, fields, formatters=formatters,
+                     sortby_index=sortby_index)
 
 
 def _show_profile(service, profile_id):
@@ -114,8 +127,6 @@ def _show_profile(service, profile_id):
 
 @utils.arg('-s', '--spec-file', metavar='<SPEC FILE>', required=True,
            help=_('The spec file used to create the profile.'))
-@utils.arg('-p', '--permission', metavar='<PERMISSION>', default='',
-           help=_('A string format permission for this profile.'))
 @utils.arg('-M', '--metadata', metavar='<KEY1=VALUE1;KEY2=VALUE2...>',
            help=_('Metadata values to be attached to the profile. '
                   'This can be specified multiple times, or once with '
@@ -125,6 +136,7 @@ def _show_profile(service, profile_id):
            help=_('Name of the profile to create.'))
 def do_profile_create(service, args):
     """Create a profile."""
+
     spec = utils.get_spec_content(args.spec_file)
     type_name = spec.get('type', None)
     type_version = spec.get('version', None)
@@ -143,7 +155,6 @@ def do_profile_create(service, args):
     params = {
         'name': args.name,
         'spec': spec,
-        'permission': args.permission,
         'metadata': utils.format_parameters(args.metadata),
     }
 
@@ -160,8 +171,6 @@ def do_profile_show(service, args):
 
 @utils.arg('-n', '--name', metavar='<NAME>',
            help=_('The new name for the profile.'))
-@utils.arg('-p', '--permission', metavar='<PERMISSION>', default='',
-           help=_('A string format permission for this profile.'))
 @utils.arg('-M', '--metadata', metavar='<KEY1=VALUE1;KEY2=VALUE2...>',
            help=_('Metadata values to be attached to the profile. '
                   'This can be specified multiple times, or once with '
@@ -173,7 +182,6 @@ def do_profile_update(service, args):
     """Update a profile."""
     params = {
         'name': args.name,
-        'permission': args.permission,
     }
     if args.metadata:
         params['metadata'] = utils.format_parameters(args.metadata)
@@ -242,23 +250,35 @@ def do_policy_type_show(service, args):
            help=_('Limit the number of policies returned.'))
 @utils.arg('-m', '--marker', metavar='<ID>',
            help=_('Only return policies that appear after the given ID.'))
+@utils.arg('-o', '--sort', metavar='<KEY:DIR>',
+           help=_('Sorting option which is a string containing a list of keys '
+                  'separated by commas. Each key can be optionally appened by '
+                  'a sort direction (:asc or :desc)'))
+@utils.arg('-g', '--global-project', default=False, action="store_true",
+           help=_('Indicate that the list should include policies from'
+                  ' all projects. This option is subject to access policy '
+                  'checking. Default is False.'))
 @utils.arg('-F', '--full-id', default=False, action="store_true",
            help=_('Print full IDs in list.'))
 def do_policy_list(service, args=None):
     """List policies that meet the criteria."""
-    fields = ['id', 'name', 'type', 'level', 'cooldown', 'created_at']
+    fields = ['id', 'name', 'type', 'created_at']
     queries = {
         'limit': args.limit,
         'marker': args.marker,
+        'sort': args.sort,
+        'global_project': args.global_project,
     }
 
+    sortby_index = None if args.sort else 1
     policies = service.policies(**queries)
     formatters = {}
     if not args.full_id:
         formatters = {
             'id': lambda x: x.id[:8]
         }
-    utils.print_list(policies, fields, formatters=formatters, sortby_index=1)
+    utils.print_list(policies, fields, formatters=formatters,
+                     sortby_index=sortby_index)
 
 
 def _show_policy(service, policy_id):
@@ -276,12 +296,6 @@ def _show_policy(service, policy_id):
 
 @utils.arg('-s', '--spec-file', metavar='<SPEC_FILE>', required=True,
            help=_('The spec file used to create the policy.'))
-@utils.arg('-c', '--cooldown', metavar='<SECONDS>', default=0,
-           help=_('An integer indicating the cooldown seconds once the '
-                  'policy is effected. Default to 0.'))
-@utils.arg('-l', '--enforcement-level', metavar='<LEVEL>', default=0,
-           help=_('An integer between 0 and 100 representing the enforcement '
-                  'level. Default to 0.'))
 @utils.arg('name', metavar='<NAME>',
            help=_('Name of the policy to create.'))
 def do_policy_create(service, args):
@@ -290,8 +304,6 @@ def do_policy_create(service, args):
     attrs = {
         'name': args.name,
         'spec': spec,
-        'cooldown': args.cooldown,
-        'level': args.enforcement_level,
     }
 
     policy = service.create_policy(**attrs)
@@ -305,12 +317,6 @@ def do_policy_show(service, args):
     _show_policy(service, policy_id=args.id)
 
 
-@utils.arg('-c', '--cooldown', metavar='<SECONDS>',
-           help=_('An integer indicating the cooldown seconds once the '
-                  'policy is effected. Default to 0.'))
-@utils.arg('-l', '--enforcement-level', metavar='<LEVEL>',
-           help=_('An integer between 0 and 100 representing the enforcement '
-                  'level. Default to 0.'))
 @utils.arg('-n', '--name', metavar='<NAME>',
            help=_('New name of the policy to be updated.'))
 @utils.arg('id', metavar='<POLICY>',
@@ -319,14 +325,11 @@ def do_policy_update(service, args):
     """Update a policy."""
     params = {
         'name': args.name,
-        'cooldown': args.cooldown,
-        'level': args.enforcement_level,
     }
 
     policy = service.get_policy(args.id)
     if policy is not None:
-        params['id'] = policy.id
-        service.update_policy(policy.id, params)
+        service.update_policy(policy.id, **params)
         _show_policy(service, policy_id=policy.id)
 
 
@@ -358,10 +361,10 @@ def do_policy_delete(service, args):
                   'This can be specified multiple times, or once with '
                   'parameters separated by a semicolon.'),
            action='append')
-@utils.arg('-k', '--sort-keys', metavar='<KEYS>',
-           help=_('Name of keys used for sorting the returned clusters.'))
-@utils.arg('-s', '--sort-dir', metavar='<DIR>',
-           help=_('Direction for sorting, where DIR can be "asc" or "desc".'))
+@utils.arg('-o', '--sort', metavar='<KEY:DIR>',
+           help=_('Sorting option which is a string containing a list of keys '
+                  'separated by commas. Each key can be optionally appened by '
+                  'a sort direction (:asc or :desc)'))
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
            help=_('Limit the number of clusters returned.'))
 @utils.arg('-m', '--marker', metavar='<ID>',
@@ -376,12 +379,10 @@ def do_policy_delete(service, args):
 def do_cluster_list(service, args=None):
     """List the user's clusters."""
     fields = ['id', 'name', 'status', 'created_at', 'updated_at']
-    sort_keys = ['name', 'status', 'created_at', 'updated_at']
     queries = {
         'limit': args.limit,
         'marker': args.marker,
-        'sort_keys': args.sort_keys,
-        'sort_dir': args.sort_dir,
+        'sort': args.sort,
         'show_nested': args.show_nested,
         'global_project': args.global_project,
     }
@@ -391,17 +392,7 @@ def do_cluster_list(service, args=None):
     if args.show_nested:
         fields.append('parent')
 
-    # we only validate the sort keys
-    # - if all keys are valid, we won't enforce sorting in the resulting list
-    # - if any keys are invalid, we abort the command execution;
-    # - if no sort key is specified, we use created_at column for sorting
-    if args.sort_keys:
-        for key in args.sort_keys.split(';'):
-            if len(key) > 0 and key not in sort_keys:
-                raise exc.CommandError(_('Invalid sorting key: %s') % key)
-        sortby_index = None
-    else:
-        sortby_index = 3
+    sortby_index = None if args.sort else 3
 
     clusters = service.clusters(**queries)
     formatters = {}
@@ -706,37 +697,27 @@ def do_cluster_scale_in(service, args):
                   'This can be specified multiple times, or once with '
                   'parameters separated by a semicolon.'),
            action='append')
-@utils.arg('-k', '--sort-keys', metavar='<KEYS>',
-           help=_('Name of keys used for sorting the returned policies.'))
-@utils.arg('-s', '--sort-dir', metavar='<DIR>',
-           help=_('Direction for sorting, where DIR can be "asc" or "desc".'))
+@utils.arg('-o', '--sort', metavar='<SORT_STRING>',
+           help=_('Sorting option which is a string containing a list of keys '
+                  'separated by commas. Each key can be optionally appened by '
+                  'a sort direction (:asc or :desc)'))
 @utils.arg('-F', '--full-id', default=False, action="store_true",
            help=_('Print full IDs in list.'))
 @utils.arg('id', metavar='<CLUSTER>',
            help=_('Name or ID of cluster to query on.'))
 def do_cluster_policy_list(service, args):
     """List policies from cluster."""
-    fields = ['policy_id', 'policy_name', 'policy_type', 'priority', 'level',
-              'cooldown', 'enabled']
-    sort_keys = ['priority', 'level', 'cooldown', 'enabled']
+    fields = ['policy_id', 'policy_name', 'policy_type', 'enabled']
 
     cluster = service.get_cluster(args.id)
     queries = {
-        'sort_keys': args.sort_keys,
-        'sort_dir': args.sort_dir,
+        'sort': args.sort,
     }
 
     if args.filters:
         queries.update(utils.format_parameters(args.filters))
 
-    sortby_index = None
-    if args.sort_keys:
-        for key in args.sort_keys.split(';'):
-            if len(key) > 0 and key not in sort_keys:
-                raise exc.CommandError(_('Invalid sorting key: %s') % key)
-    else:
-        sortby_index = 3
-
+    sortby_index = None if args.sort else 3
     policies = service.cluster_policies(cluster.id, **queries)
     formatters = {}
     if not args.full_id:
@@ -760,16 +741,6 @@ def do_cluster_policy_show(service, args):
 
 @utils.arg('-p', '--policy', metavar='<POLICY>', required=True,
            help=_('ID or name of policy to be attached.'))
-@utils.arg('-r', '--priority', metavar='<PRIORITY>', default=50,
-           help=_('An integer specifying the relative priority among '
-                  'all policies attached to a cluster. The lower the '
-                  'value, the higher the priority. Default is 50.'))
-@utils.arg('-l', '--enforcement-level', metavar='<LEVEL>',
-           help=_('An integer between 0 and 100 representing the enforcement '
-                  'level. Default to enforcement level of policy.'))
-@utils.arg('-c', '--cooldown', metavar='<SECONDS>',
-           help=_('An integer indicating the cooldown seconds once the '
-                  'policy is effected. Default to cooldown of policy.'))
 @utils.arg('-e', '--enabled', default=True, action="store_true",
            help=_('Whether the policy should be enabled once attached. '
                   'Default to enabled.'))
@@ -778,9 +749,6 @@ def do_cluster_policy_show(service, args):
 def do_cluster_policy_attach(service, args):
     """Attach policy to cluster."""
     kwargs = {
-        'priority': args.priority,
-        'level': args.enforcement_level,
-        'cooldown': args.cooldown,
         'enabled': args.enabled,
     }
 
@@ -800,14 +768,6 @@ def do_cluster_policy_detach(service, args):
 
 @utils.arg('-p', '--policy', metavar='<POLICY>', required=True,
            help=_('ID or name of policy to be updated.'))
-@utils.arg('-r', '--priority', metavar='<PRIORITY>',
-           help=_('An integer specifying the relative priority among '
-                  'all policies attached to a cluster. The lower the '
-                  'value, the higher the priority. Default is 50.'))
-@utils.arg('-l', '--enforcement-level', metavar='<LEVEL>',
-           help=_('New enforcement level.'))
-@utils.arg('-c', '--cooldown', metavar='<COOLDOWN>',
-           help=_('Cooldown interval in seconds.'))
 @utils.arg('-e', '--enabled', metavar='<BOOLEAN>',
            help=_('Whether the policy should be enabled.'))
 @utils.arg('id', metavar='<NAME or ID>',
@@ -816,33 +776,10 @@ def do_cluster_policy_update(service, args):
     """Update a policy's properties on a cluster."""
     kwargs = {
         'policy_id': args.policy,
-        'priority': args.priority,
-        'level': args.enforcement_level,
-        'cooldown': args.cooldown,
         'enabled': args.enabled,
     }
 
     resp = service.cluster_update_policy(args.id, **kwargs)
-    print('Request accepted by action: %s' % resp['action'])
-
-
-@utils.arg('-p', '--policy', metavar='<POLICY>', required=True,
-           help=_('ID or name of policy to be enabled.'))
-@utils.arg('id', metavar='<NAME or ID>',
-           help=_('Name or ID of cluster to operate on.'))
-def do_cluster_policy_enable(service, args):
-    """Enable a policy on a cluster."""
-    resp = service.cluster_enable_policy(args.id, args.policy)
-    print('Request accepted by action: %s' % resp['action'])
-
-
-@utils.arg('-p', '--policy', metavar='<POLICY>', required=True,
-           help=_('ID or name of policy to be disabled.'))
-@utils.arg('id', metavar='<NAME or ID>',
-           help=_('Name or ID of cluster to operate on.'))
-def do_cluster_policy_disable(service, args):
-    """Disable a policy on a cluster."""
-    resp = service.cluster_disable_policy(args.id, args.policy)
     print('Request accepted by action: %s' % resp['action'])
 
 
@@ -856,10 +793,10 @@ def do_cluster_policy_disable(service, args):
                   'This can be specified multiple times, or once with '
                   'parameters separated by a semicolon.'),
            action='append')
-@utils.arg('-k', '--sort-keys', metavar='<KEYS>',
-           help=_('Name of keys used for sorting the returned nodes.'))
-@utils.arg('-s', '--sort-dir', metavar='<DIR>',
-           help=_('Direction for sorting, where DIR can be "asc" or "desc".'))
+@utils.arg('-o', '--sort', metavar='<KEY:DIR>',
+           help=_('Sorting option which is a string containing a list of keys '
+                  'separated by commas. Each key can be optionally appened by '
+                  'a sort direction (:asc or :desc)'))
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
            help=_('Limit the number of nodes returned.'))
 @utils.arg('-m', '--marker', metavar='<ID>',
@@ -875,12 +812,9 @@ def do_node_list(service, args):
 
     fields = ['id', 'name', 'index', 'status', 'cluster_id', 'physical_id',
               'profile_name', 'created_at', 'updated_at']
-    sort_keys = ['index', 'name', 'created_at', 'updated_at', 'status']
-
     queries = {
         'cluster_id': args.cluster,
-        'sort_keys': args.sort_keys,
-        'sort_dir': args.sort_dir,
+        'sort': args.sort,
         'limit': args.limit,
         'marker': args.marker,
         'global_project': args.global_project,
@@ -889,13 +823,7 @@ def do_node_list(service, args):
     if args.filters:
         queries.update(utils.format_parameters(args.filters))
 
-    sortby_index = None
-    if args.sort_keys:
-        for key in args.sort_keys.split(';'):
-            if len(key) > 0 and key not in sort_keys:
-                raise exc.CommandError(_('Invalid sorting key: %s') % key)
-    else:
-        sortby_index = 6
+    sortby_index = None if args.sort else 6
 
     nodes = service.nodes(**queries)
 
@@ -915,9 +843,9 @@ def do_node_list(service, args):
 def _show_node(service, node_id, show_details=False):
     """Show detailed info about the specified node."""
 
-    # TODO(Qiming): Re-enable show_details after SDK adopts related patch.
+    args = {'show_details': True} if show_details else None
     try:
-        node = service.get_node(node_id)
+        node = service.get_node(node_id, args=args)
     except exc.HTTPNotFound:
         msg = _('Node %s is not found') % node_id
         raise exc.CommandError(msg)
@@ -1020,26 +948,6 @@ def do_node_update(service, args):
     _show_node(service, node.id)
 
 
-@utils.arg('-c', '--cluster', required=True,
-           help=_('ID or name of cluster for node to join.'))
-@utils.arg('id', metavar='<NODE>',
-           help=_('Name or ID of node to operate on.'))
-def do_node_join(service, args):
-    """Make node join the specified cluster."""
-    resp = service.node_join(args.id, args.cluster)
-    print('Request accepted by action: %s' % resp['action'])
-    _show_node(service, args.id)
-
-
-@utils.arg('id', metavar='<NODE>',
-           help=_('Name or ID of node to operate on.'))
-def do_node_leave(service, args):
-    """Make node leave its current cluster."""
-    resp = service.node_leave(args.id)
-    print('Request accepted by action: %s' % resp['action'])
-    _show_node(service, args.id)
-
-
 # RECEIVERS
 
 
@@ -1052,10 +960,10 @@ def do_node_leave(service, args):
            help=_('Limit the number of receivers returned.'))
 @utils.arg('-m', '--marker', metavar='<ID>',
            help=_('Only return receivers that appear after the given ID.'))
-@utils.arg('-k', '--sort-keys', metavar='<KEYS>',
-           help=_('Name of keys used for sorting the returned receivers.'))
-@utils.arg('-s', '--sort-dir', metavar='<DIR>',
-           help=_('Direction for sorting, where DIR can be "asc" or "desc".'))
+@utils.arg('-o', '--sort', metavar='<KEY[:DIR]>',
+           help=_('Sorting option which is a string containing a list of keys '
+                  'separated by commas. Each key can be optionally appened by '
+                  'a sort direction (:asc or :desc)'))
 @utils.arg('-g', '--global-project', default=False, action="store_true",
            help=_('Indicate that the list should include receivers from'
                   ' all projects. This option is subject to access policy '
@@ -1065,25 +973,17 @@ def do_node_leave(service, args):
 def do_receiver_list(service, args=None):
     """List receivers that meet the criteria."""
     fields = ['id', 'name', 'type', 'cluster_id', 'action', 'created_at']
-    sort_keys = ['name', 'type', 'cluster_id', 'created_at']
     queries = {
         'limit': args.limit,
         'marker': args.marker,
-        'sort_keys': args.sort_keys,
-        'sort_dir': args.sort_dir,
+        'sort': args.sort,
         'global_project': args.global_project,
     }
 
     if args.filters:
         queries.update(utils.format_parameters(args.filters))
 
-    if args.sort_keys:
-        for key in args.sort_keys.split(';'):
-            if len(key) > 0 and key not in sort_keys:
-                raise exc.CommandError(_('Invalid sorting key: %s') % key)
-        sortby_index = None
-    else:
-        sortby_index = 0
+    sortby_index = None if args.sort else 0
 
     receivers = service.receivers(**queries)
     formatters = {}
@@ -1175,10 +1075,10 @@ def do_receiver_delete(service, args):
            help=_('Limit the number of events returned.'))
 @utils.arg('-m', '--marker', metavar='<ID>',
            help=_('Only return events that appear after the given event ID.'))
-@utils.arg('-k', '--sort-keys', metavar='<KEYS>',
-           help=_('Name of keys used for sorting the returned events.'))
-@utils.arg('-s', '--sort-dir', metavar='<DIR>',
-           help=_('Direction for sorting, where DIR can be "asc" or "desc".'))
+@utils.arg('-o', '--sort', metavar='<KEY:DIR>',
+           help=_('Sorting option which is a string containing a list of keys '
+                  'separated by commas. Each key can be optionally appened by '
+                  'a sort direction (:asc or :desc)'))
 @utils.arg('-g', '--global-project', default=False, action="store_true",
            help=_('Whether events from all projects should be listed. '
                   ' Default to False. Setting this to True may demand '
@@ -1190,11 +1090,8 @@ def do_event_list(service, args):
 
     fields = ['id', 'timestamp', 'obj_type', 'obj_id', 'obj_name', 'action',
               'status', 'status_reason', 'level']
-    sort_keys = ['timestamp', 'obj_type', 'obj_name', 'level', 'action']
-
     queries = {
-        'sort_keys': args.sort_keys,
-        'sort_dir': args.sort_dir,
+        'sort': args.sort,
         'limit': args.limit,
         'marker': args.marker,
         'global_project': args.global_project,
@@ -1203,14 +1100,7 @@ def do_event_list(service, args):
     if args.filters:
         queries.update(utils.format_parameters(args.filters))
 
-    sortby_index = None
-    if args.sort_keys:
-        for key in args.sort_keys.split(';'):
-            if len(key) > 0 and key not in sort_keys:
-                raise exc.CommandError(_('Invalid sorting key: %s') % key)
-    else:
-        sortby_index = 0
-
+    sortby_index = None if args.sort else 0
     formatters = {}
     if not args.full_id:
         formatters['id'] = lambda x: x.id[:8]
@@ -1241,10 +1131,10 @@ def do_event_show(service, args):
                   'This can be specified multiple times, or once with '
                   'parameters separated by a semicolon.'),
            action='append')
-@utils.arg('-k', '--sort-keys', metavar='<KEYS>',
-           help=_('Name of keys used for sorting the returned actions.'))
-@utils.arg('-s', '--sort-dir', metavar='<DIR>',
-           help=_('Direction for sorting, where DIR can be "asc" or "desc".'))
+@utils.arg('-o', '--sort', metavar='<KEY:DIR>',
+           help=_('Sorting option which is a string containing a list of keys '
+                  'separated by commas. Each key can be optionally appened by '
+                  'a sort direction (:asc or :desc)'))
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
            help=_('Limit the number of actions returned.'))
 @utils.arg('-m', '--marker', metavar='<ID>',
@@ -1256,11 +1146,9 @@ def do_action_list(service, args):
 
     fields = ['id', 'name', 'action', 'status', 'target', 'depends_on',
               'depended_by', 'created_at']
-    sort_keys = ['name', 'target', 'action', 'created_at', 'status']
 
     queries = {
-        'sort_keys': args.sort_keys,
-        'sort_dir': args.sort_dir,
+        'sort': args.sort,
         'limit': args.limit,
         'marker': args.marker,
     }
@@ -1268,13 +1156,7 @@ def do_action_list(service, args):
     if args.filters:
         queries.update(utils.format_parameters(args.filters))
 
-    sortby_index = None
-    if args.sort_keys:
-        for key in args.sort_keys.split(';'):
-            if len(key) > 0 and key not in sort_keys:
-                raise exc.CommandError(_('Invalid sorting key: %s') % key)
-    else:
-        sortby_index = 0
+    sortby_index = None if args.sort else 0
 
     actions = service.actions(**queries)
 
