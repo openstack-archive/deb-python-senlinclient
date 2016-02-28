@@ -56,8 +56,8 @@ Build-Depends-Indep: git,
                      subunit,
                      testrepository,
 Standards-Version: 3.9.6
-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=openstack/python-senlinclient.git
-Vcs-Git: git://anonscm.debian.org/openstack/python-senlinclient.git
+Vcs-Browser: https://anonscm.debian.org/cgit/openstack/python-senlinclient.git/
+Vcs-Git: https://anonscm.debian.org/git/openstack/python-senlinclient.git
 Homepage: https://github.com/openstack/python-senlinclient
 
 Package: python-senlinclient

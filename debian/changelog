@@ -7,6 +7,9 @@ python-senlinclient (0.3.0-1) UNRELEASED; urgency=medium
   [ Corey Bryant ]
   * d/control: Update uploaders.
 
+  [ Ondřej Nový ]
+  * Fixed VCS URLs (https).
+
  -- Corey Bryant <corey.bryant@canonical.com>  Mon, 22 Feb 2016 12:53:42 -0500
 
 python-senlinclient (0.2.1-1) experimental; urgency=medium
