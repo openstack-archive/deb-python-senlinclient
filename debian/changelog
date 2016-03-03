@@ -1,4 +1,4 @@
-python-senlinclient (0.3.0-1) UNRELEASED; urgency=medium
+python-senlinclient (0.3.0-2) UNRELEASED; urgency=medium
 
   [ David Della Vecchia ]
   * New upstream release.
@@ -10,7 +10,10 @@ python-senlinclient (0.3.0-1) UNRELEASED; urgency=medium
   [ Ondřej Nový ]
   * Fixed VCS URLs (https).
 
- -- Corey Bryant <corey.bryant@canonical.com>  Mon, 22 Feb 2016 12:53:42 -0500
+  [ Thomas Goirand ]
+  * Standards-Version: 3.9.7.
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 03 Mar 2016 08:14:02 +0000
 
 python-senlinclient (0.2.1-1) experimental; urgency=medium
 
