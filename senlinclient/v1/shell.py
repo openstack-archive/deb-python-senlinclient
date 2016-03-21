@@ -12,6 +12,7 @@
 
 import logging
 
+from openstack import exceptions as sdk_exc
 from senlinclient.common import exc
 from senlinclient.common.i18n import _
 from senlinclient.common import utils
@@ -57,9 +58,9 @@ def do_profile_type_show(service, args):
     """Get the details about a profile type."""
     try:
         res = service.get_profile_type(args.type_name)
-    except exc.HTTPNotFound:
+    except sdk_exc.ResourceNotFound:
         raise exc.CommandError(
-            _('Profile Type %s not found.') % args.type_name)
+            _('Profile Type not found: %s') % args.type_name)
 
     pt = res.to_dict()
 
@@ -71,7 +72,11 @@ def do_profile_type_show(service, args):
 
 # PROFILES
 
-
+@utils.arg('-f', '--filters', metavar='<KEY1=VALUE1;KEY2=VALUE2...>',
+           help=_('Filter parameters to apply on returned profiles. '
+                  'This can be specified multiple times, or once with '
+                  'parameters separated by a semicolon.'),
+           action='append')
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
            help=_('Limit the number of profiles returned.'))
 @utils.arg('-m', '--marker', metavar='<ID>',
@@ -95,6 +100,8 @@ def do_profile_list(service, args=None):
         'sort': args.sort,
         'global_project': args.global_project,
     }
+    if args.filters:
+        queries.update(utils.format_parameters(args.filters))
 
     sortby_index = None if args.sort else 1
 
@@ -111,7 +118,7 @@ def do_profile_list(service, args=None):
 def _show_profile(service, profile_id):
     try:
         profile = service.get_profile(profile_id)
-    except exc.HTTPNotFound:
+    except sdk_exc.ResourceNotFound:
         raise exc.CommandError(_('Profile not found: %s') % profile_id)
 
     formatters = {
@@ -189,7 +196,7 @@ def do_profile_update(service, args):
     # Find the profile first, we need its id
     try:
         profile = service.get_profile(args.id)
-    except exc.HTTPNotFound:
+    except sdk_exc.ResourceNotFound:
         raise exc.CommandError(_('Profile not found: %s') % args.id)
     service.update_profile(profile.id, **params)
     _show_profile(service, profile.id)
@@ -203,7 +210,7 @@ def do_profile_delete(service, args):
 
     for pid in args.id:
         try:
-            service.delete_profile(pid)
+            service.delete_profile(pid, False)
         except Exception as ex:
             failure_count += 1
             print(ex)
@@ -232,9 +239,8 @@ def do_policy_type_show(service, args):
     """Get the details about a policy type."""
     try:
         res = service.get_policy_type(args.type_name)
-    except exc.HTTPNotFound:
-        raise exc.CommandError(
-            _('Policy type %s not found.') % args.type_name)
+    except sdk_exc.ResourceNotFound:
+        raise exc.CommandError(_('Policy type not found: %s') % args.type_name)
 
     pt = res.to_dict()
     if args.format:
@@ -245,7 +251,11 @@ def do_policy_type_show(service, args):
 
 # POLICIES
 
-
+@utils.arg('-f', '--filters', metavar='<KEY1=VALUE1;KEY2=VALUE2...>',
+           help=_('Filter parameters to apply on returned policies. '
+                  'This can be specified multiple times, or once with '
+                  'parameters separated by a semicolon.'),
+           action='append')
 @utils.arg('-l', '--limit', metavar='<LIMIT>',
            help=_('Limit the number of policies returned.'))
 @utils.arg('-m', '--marker', metavar='<ID>',
@@ -269,6 +279,8 @@ def do_policy_list(service, args=None):
         'sort': args.sort,
         'global_project': args.global_project,
     }
+    if args.filters:
+        queries.update(utils.format_parameters(args.filters))
 
     sortby_index = None if args.sort else 1
     policies = service.policies(**queries)
@@ -284,7 +296,7 @@ def do_policy_list(service, args=None):
 def _show_policy(service, policy_id):
     try:
         policy = service.get_policy(policy_id)
-    except exc.HTTPNotFound:
+    except sdk_exc.ResourceNotFound:
         raise exc.CommandError(_('Policy not found: %s') % policy_id)
 
     formatters = {
@@ -341,8 +353,8 @@ def do_policy_delete(service, args):
 
     for pid in args.id:
         try:
-            service.delete_policy(pid)
-        except exc.HTTPNotFound as ex:
+            service.delete_policy(pid, False)
+        except Exception as ex:
             failure_count += 1
             print(ex)
     if failure_count > 0:
@@ -354,8 +366,6 @@ def do_policy_delete(service, args):
 # CLUSTERS
 
 
-@utils.arg('-n', '--show-nested', default=False, action="store_true",
-           help=_('Include nested clusters if any.'))
 @utils.arg('-f', '--filters', metavar='<KEY1=VALUE1;KEY2=VALUE2...>',
            help=_('Filter parameters to apply on returned clusters. '
                   'This can be specified multiple times, or once with '
@@ -383,14 +393,10 @@ def do_cluster_list(service, args=None):
         'limit': args.limit,
         'marker': args.marker,
         'sort': args.sort,
-        'show_nested': args.show_nested,
         'global_project': args.global_project,
     }
     if args.filters:
         queries.update(utils.format_parameters(args.filters))
-
-    if args.show_nested:
-        fields.append('parent')
 
     sortby_index = None if args.sort else 3
 
@@ -407,8 +413,8 @@ def do_cluster_list(service, args=None):
 def _show_cluster(service, cluster_id):
     try:
         cluster = service.get_cluster(cluster_id)
-    except exc.HTTPNotFound:
-        raise exc.CommandError(_('Cluster %s is not found') % cluster_id)
+    except sdk_exc.ResourceNotFound:
+        raise exc.CommandError(_('Cluster not found: %s') % cluster_id)
 
     formatters = {
         'metadata': utils.json_formatter,
@@ -426,8 +432,6 @@ def _show_cluster(service, cluster_id):
 @utils.arg('-c', '--desired-capacity', metavar='<DESIRED-CAPACITY>', default=0,
            help=_('Desired capacity of the cluster. Default to min_size if '
                   'min_size is specified else 0.'))
-@utils.arg('-o', '--parent', metavar='<PARENT_ID>',
-           help=_('ID of the parent cluster, if exists.'))
 @utils.arg('-t', '--timeout', metavar='<TIMEOUT>', type=int,
            help=_('Cluster creation timeout in seconds.'))
 @utils.arg('-M', '--metadata', metavar='<KEY1=VALUE1;KEY2=VALUE2...>',
@@ -447,7 +451,6 @@ def do_cluster_create(service, args):
         'min_size': args.min_size,
         'max_size': args.max_size,
         'desired_capacity': args.desired_capacity,
-        'parent': args.parent,
         'metadata': utils.format_parameters(args.metadata),
         'timeout': args.timeout
     }
@@ -464,14 +467,13 @@ def do_cluster_delete(service, args):
 
     for cid in args.id:
         try:
-            service.delete_cluster(cid)
-        except exc.HTTPNotFound as ex:
+            service.delete_cluster(cid, False)
+        except Exception as ex:
             failure_count += 1
             print(ex)
     if failure_count > 0:
         msg = _('Failed to delete some of the specified clusters.')
         raise exc.CommandError(msg)
-
     print('Request accepted')
 
 
@@ -479,8 +481,6 @@ def do_cluster_delete(service, args):
            help=_('ID of new profile to use.'))
 @utils.arg('-t', '--timeout', metavar='<TIMEOUT>',
            help=_('New timeout (in seconds) value for the cluster.'))
-@utils.arg('-r', '--parent', metavar='<PARENT>',
-           help=_('ID of parent cluster for the cluster.'))
 @utils.arg('-M', '--metadata', metavar='<KEY1=VALUE1;KEY2=VALUE2...>',
            help=_('Metadata values to be attached to the cluster. '
                   'This can be specified multiple times, or once with '
@@ -496,7 +496,6 @@ def do_cluster_update(service, args):
     attrs = {
         'name': args.name,
         'profile_id': args.profile,
-        'parent': args.parent,
         'metadata': utils.format_parameters(args.metadata),
         'timeout': args.timeout,
     }
@@ -536,12 +535,7 @@ def do_cluster_node_list(service, args):
     if args.filters:
         queries.update(utils.format_parameters(args.filters))
 
-    try:
-        nodes = service.nodes(**queries)
-    except exc.HTTPNotFound:
-        msg = _('No node matching criteria is found')
-        raise exc.CommandError(msg)
-
+    nodes = service.nodes(**queries)
     if not args.full_id:
         formatters = {
             'id': lambda x: x.id[:8],
@@ -775,11 +769,10 @@ def do_cluster_policy_detach(service, args):
 def do_cluster_policy_update(service, args):
     """Update a policy's properties on a cluster."""
     kwargs = {
-        'policy_id': args.policy,
         'enabled': args.enabled,
     }
 
-    resp = service.cluster_update_policy(args.id, **kwargs)
+    resp = service.cluster_update_policy(args.id, args.policy, **kwargs)
     print('Request accepted by action: %s' % resp['action'])
 
 
@@ -846,9 +839,8 @@ def _show_node(service, node_id, show_details=False):
     args = {'show_details': True} if show_details else None
     try:
         node = service.get_node(node_id, args=args)
-    except exc.HTTPNotFound:
-        msg = _('Node %s is not found') % node_id
-        raise exc.CommandError(msg)
+    except sdk_exc.ResourceNotFound:
+        raise exc.CommandError(_('Node not found: %s') % node_id)
 
     formatters = {
         'metadata': utils.json_formatter,
@@ -906,10 +898,10 @@ def do_node_delete(service, args):
 
     for nid in args.id:
         try:
-            service.delete_node(nid, True)
-        except exc.HTTPNotFound:
+            service.delete_node(nid, False)
+        except Exception as ex:
             failure_count += 1
-            print('Node id "%s" not found' % nid)
+            print(ex)
     if failure_count > 0:
         msg = _('Failed to delete some of the specified nodes.')
         raise exc.CommandError(msg)
@@ -934,7 +926,7 @@ def do_node_update(service, args):
     # Find the node first, we need its UUID
     try:
         node = service.get_node(args.id)
-    except exc.HTTPNotFound:
+    except sdk_exc.ResourceNotFound:
         raise exc.CommandError(_('Node not found: %s') % args.id)
 
     attrs = {
@@ -960,7 +952,7 @@ def do_node_update(service, args):
            help=_('Limit the number of receivers returned.'))
 @utils.arg('-m', '--marker', metavar='<ID>',
            help=_('Only return receivers that appear after the given ID.'))
-@utils.arg('-o', '--sort', metavar='<KEY[:DIR]>',
+@utils.arg('-o', '--sort', metavar='<KEY:DIR>',
            help=_('Sorting option which is a string containing a list of keys '
                   'separated by commas. Each key can be optionally appened by '
                   'a sort direction (:asc or :desc)'))
@@ -970,7 +962,7 @@ def do_node_update(service, args):
                   'checking. Default is False.'))
 @utils.arg('-F', '--full-id', default=False, action="store_true",
            help=_('Print full IDs in list.'))
-def do_receiver_list(service, args=None):
+def do_receiver_list(service, args):
     """List receivers that meet the criteria."""
     fields = ['id', 'name', 'type', 'cluster_id', 'action', 'created_at']
     queries = {
@@ -999,7 +991,7 @@ def do_receiver_list(service, args=None):
 def _show_receiver(service, receiver_id):
     try:
         receiver = service.get_receiver(receiver_id)
-    except exc.HTTPNotFound:
+    except sdk_exc.ResourceNotFound:
         raise exc.CommandError(_('Receiver not found: %s') % receiver_id)
 
     formatters = {
@@ -1020,7 +1012,7 @@ def do_receiver_show(service, args):
 
 @utils.arg('-t', '--type', metavar='<TYPE>', default='webhook',
            help=_('Type of the receiver to create.'))
-@utils.arg('-c', '--cluster', metavar='<CLUSTER>',
+@utils.arg('-c', '--cluster', metavar='<CLUSTER>', required=True,
            help=_('Targeted cluster for this receiver.'))
 @utils.arg('-a', '--action', metavar='<ACTION>', required=True,
            help=_('Name or ID of the targeted action to be triggered.'))
@@ -1053,8 +1045,8 @@ def do_receiver_delete(service, args):
 
     for wid in args.id:
         try:
-            service.delete_receiver(wid)
-        except exc.HTTPNotFound as ex:
+            service.delete_receiver(wid, False)
+        except Exception as ex:
             failure_count += 1
             print(ex)
     if failure_count > 0:
@@ -1117,8 +1109,8 @@ def do_event_show(service, args):
     """Describe the event."""
     try:
         event = service.get_event(args.id)
-    except exc.HTTPNotFound as ex:
-        raise exc.CommandError(str(ex))
+    except sdk_exc.ResourceNotFound:
+        raise exc.CommandError(_("Event not found: %s") % args.id)
 
     utils.print_dict(event.to_dict())
 
@@ -1185,15 +1177,16 @@ def do_action_show(service, args):
     """Show detailed info about the specified action."""
     try:
         action = service.get_action(args.id)
-    except exc.HTTPNotFound:
-        msg = _('Action %(id)s is not found') % {'id': args.id}
-        raise exc.CommandError(msg)
+    except sdk_exc.ResourceNotFound:
+        raise exc.CommandError(_('Action not found: %s') % args.id)
 
     formatters = {
         'inputs': utils.json_formatter,
         'outputs': utils.json_formatter,
         'metadata': utils.json_formatter,
         'data': utils.json_formatter,
+        'depends_on': utils.list_formatter,
+        'depended_by': utils.list_formatter,
     }
 
     utils.print_dict(action.to_dict(), formatters=formatters)

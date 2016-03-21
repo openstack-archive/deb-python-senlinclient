@@ -15,6 +15,7 @@ import mock
 import six
 import testtools
 
+from openstack import exceptions as oexc
 from senlinclient.common import exc
 from senlinclient.common.i18n import _
 from senlinclient.common import utils
@@ -28,7 +29,6 @@ class ShellTest(testtools.TestCase):
         self.profile_args = {
             'spec_file': mock.Mock(),
             'name': 'stack_spec',
-            'permission': 'ok',
             'metadata': {'user': 'demo'}
         }
         self.profile_spec = {
@@ -95,12 +95,12 @@ class ShellTest(testtools.TestCase):
             'format': 'json'
         }
         args = self._make_args(args)
-        ex = exc.HTTPNotFound
+        ex = oexc.ResourceNotFound
         service.get_profile_type = mock.Mock(side_effect=ex)
         ex = self.assertRaises(exc.CommandError,
                                sh.do_profile_type_show,
                                service, args)
-        self.assertEqual(_('Profile Type wrong_type not found.'),
+        self.assertEqual(_('Profile Type not found: wrong_type'),
                          six.text_type(ex))
 
     @mock.patch.object(utils, 'print_list')
@@ -114,8 +114,11 @@ class ShellTest(testtools.TestCase):
             'marker': 'mark_id',
             'sort': 'key:dir',
             'global_project': True,
+            'filters': ['name=stack_spec']
         }
         queries = copy.deepcopy(args)
+        del queries['filters']
+        queries['name'] = 'stack_spec'
         formatters = {}
         args = self._make_args(args)
         args.full_id = True
@@ -154,7 +157,7 @@ class ShellTest(testtools.TestCase):
 
     def test_show_profile_not_found(self):
         service = mock.Mock()
-        ex = exc.HTTPNotFound
+        ex = oexc.ResourceNotFound
         service.get_profile.side_effect = ex
         profile_id = 'wrong_id'
         ex = self.assertRaises(exc.CommandError,
@@ -257,7 +260,7 @@ class ShellTest(testtools.TestCase):
         args = copy.deepcopy(self.profile_args)
         args = self._make_args(args)
         args.id = 'FAKE_ID'
-        ex = exc.HTTPNotFound
+        ex = oexc.ResourceNotFound
         service.get_profile.side_effect = ex
         ex = self.assertRaises(exc.CommandError,
                                sh.do_profile_update,
@@ -271,21 +274,20 @@ class ShellTest(testtools.TestCase):
         args = {'id': ['profile_id']}
         args = self._make_args(args)
         sh.do_profile_delete(service, args)
-        service.delete_profile.assert_called_with('profile_id')
+        service.delete_profile.assert_called_with('profile_id', False)
 
-    def test_do_profile_delete_fail(self):
+    def test_do_profile_delete_not_found(self):
         service = mock.Mock()
         args = {'id': ['profile1', 'profile2']}
         args = self._make_args(args)
         sh.do_profile_delete(service, args)
-        ex = Exception()
-        service.delete_profile.side_effect = ex
+        service.delete_profile.side_effect = oexc.ResourceNotFound
         ex = self.assertRaises(exc.CommandError,
                                sh.do_profile_delete,
                                service, args)
-        self.assertEqual(_('Failed to delete some of the specified '
-                           'profile(s).'), six.text_type(ex))
-        service.delete_profile.assert_called_with('profile2')
+        msg = _("Failed to delete some of the specified profile(s).")
+        self.assertEqual(msg, six.text_type(ex))
+        service.delete_profile.assert_called_with('profile2', False)
 
     @mock.patch.object(utils, 'print_list')
     def test_do_policy_type_list(self, mock_print):
@@ -326,10 +328,10 @@ class ShellTest(testtools.TestCase):
         args = {'type_name': 'BAD'}
         args = self._make_args(args)
 
-        service.get_policy_type.side_effect = exc.HTTPNotFound
+        service.get_policy_type.side_effect = oexc.ResourceNotFound
         ex = self.assertRaises(exc.CommandError,
                                sh.do_policy_type_show, service, args)
-        msg = _('Policy type BAD not found.')
+        msg = _('Policy type not found: BAD')
         self.assertEqual(msg, six.text_type(ex))
 
     @mock.patch.object(utils, 'print_list')
@@ -400,7 +402,7 @@ class ShellTest(testtools.TestCase):
         receiver_id = 'wrong_id'
         receiver.id = receiver_id
 
-        service.get_receiver.side_effect = exc.HTTPNotFound
+        service.get_receiver.side_effect = oexc.ResourceNotFound
         ex = self.assertRaises(exc.CommandError,
                                sh._show_receiver, service, receiver_id)
         self.assertEqual(_('Receiver not found: wrong_id'), six.text_type(ex))
@@ -445,17 +447,17 @@ class ShellTest(testtools.TestCase):
         args = self._make_args(args)
         service.delete_receiver = mock.Mock()
         sh.do_receiver_delete(service, args)
-        service.delete_receiver.assert_called_once_with('FAKE')
+        service.delete_receiver.assert_called_once_with('FAKE', False)
 
     def test_do_receiver_delete_not_found(self):
         service = mock.Mock()
         args = {'id': ['receiver_id']}
         args = self._make_args(args)
 
-        service.delete_receiver.side_effect = exc.HTTPNotFound
+        service.delete_receiver.side_effect = oexc.ResourceNotFound
         ex = self.assertRaises(exc.CommandError,
                                sh.do_receiver_delete, service, args)
-        msg = _('Failed to delete some of the specified receiver(s).')
+        msg = _("Failed to delete some of the specified receiver(s).")
         self.assertEqual(msg, six.text_type(ex))
 
     @mock.patch.object(utils, 'print_list')
@@ -467,7 +469,8 @@ class ShellTest(testtools.TestCase):
             'marker': 'fake_id',
             'sort': 'name',
             'global_project': False,
-            'full_id': True
+            'full_id': True,
+            'filters': ['name=stack_spec']
         }
         args = self._make_args(args)
         queries = {
@@ -475,6 +478,7 @@ class ShellTest(testtools.TestCase):
             'marker': 'fake_id',
             'sort': 'name',
             'global_project': False,
+            'name': 'stack_spec',
         }
         policies = mock.Mock()
         service.policies.return_value = policies
@@ -508,7 +512,7 @@ class ShellTest(testtools.TestCase):
                                            formatters=formatters)
 
         # policy not found
-        ex = exc.HTTPNotFound
+        ex = oexc.ResourceNotFound
         service.get_policy.side_effect = ex
         ex = self.assertRaises(exc.CommandError,
                                sh._show_policy,
@@ -573,28 +577,27 @@ class ShellTest(testtools.TestCase):
         args = self._make_args(args)
         service.delete_policy = mock.Mock()
         sh.do_policy_delete(service, args)
-        service.delete_policy.assert_called_once_with('policy_id')
+        service.delete_policy.assert_called_once_with('policy_id', False)
 
     def test_do_policy_delete_not_found(self):
         service = mock.Mock()
         args = {'id': ['policy_id']}
         args = self._make_args(args)
 
-        service.delete_policy.side_effect = exc.HTTPNotFound
+        service.delete_policy.side_effect = oexc.ResourceNotFound
         ex = self.assertRaises(exc.CommandError,
                                sh.do_policy_delete, service, args)
-        msg = _('Failed to delete some of the specified policy(s).')
+        msg = _("Failed to delete some of the specified policy(s).")
         self.assertEqual(msg, six.text_type(ex))
 
     @mock.patch.object(utils, 'print_list')
     def test_do_cluster_list(self, mock_print):
         service = mock.Mock()
-        fields = ['id', 'name', 'status', 'created_at', 'updated_at', 'parent']
+        fields = ['id', 'name', 'status', 'created_at', 'updated_at']
         args = {
             'limit': 20,
             'marker': 'fake_id',
             'sort': 'key:dir',
-            'show_nested': True,
             'global_project': False,
             'filters': ['status=ACTIVE'],
         }
@@ -641,7 +644,6 @@ class ShellTest(testtools.TestCase):
             'min_size': 1,
             'max_size': 10,
             'desired_capacity': 5,
-            'parent': 'CLUSTER',
             'metadata': ['user=demo'],
             'timeout': 200,
         }
@@ -663,14 +665,14 @@ class ShellTest(testtools.TestCase):
         args = self._make_args(args)
         service.delete_cluster = mock.Mock()
         sh.do_cluster_delete(service, args)
-        service.delete_cluster.assert_called_once_with('CID')
+        service.delete_cluster.assert_called_once_with('CID', False)
 
     def test_do_cluster_delete_not_found(self):
         service = mock.Mock()
         args = {'id': ['cluster_id']}
         args = self._make_args(args)
 
-        service.delete_cluster.side_effect = exc.HTTPNotFound
+        service.delete_cluster.side_effect = oexc.ResourceNotFound
         ex = self.assertRaises(exc.CommandError,
                                sh.do_cluster_delete, service, args)
         msg = _('Failed to delete some of the specified clusters.')
@@ -682,7 +684,6 @@ class ShellTest(testtools.TestCase):
         args = {
             'profile': 'test_profile',
             'name': 'CLUSTER1',
-            'parent': 'parent_cluster',
             'metadata': ['user=demo'],
             'timeout': 100,
         }
@@ -736,13 +737,6 @@ class ShellTest(testtools.TestCase):
         mock_print.assert_called_once_with(nodes, fields,
                                            formatters=formatters,
                                            sortby_index=5)
-
-        # node not found
-        service.nodes.side_effect = exc.HTTPNotFound
-        ex = self.assertRaises(exc.CommandError,
-                               sh.do_cluster_node_list, service, args)
-        msg = _('No node matching criteria is found')
-        self.assertEqual(msg, six.text_type(ex))
 
     def test_do_cluster_node_add(self):
         service = mock.Mock()
@@ -1026,14 +1020,14 @@ class ShellTest(testtools.TestCase):
         }
         args = self._make_args(args)
         kwargs = {
-            'policy_id': 'policy1',
             'enabled': 'True',
         }
         service.cluster_update_policy.return_value = {'action': 'action_id'}
 
         sh.do_cluster_policy_update(service, args)
 
-        service.cluster_update_policy.assert_called_once_with('C1', **kwargs)
+        service.cluster_update_policy.assert_called_once_with('C1', 'policy1',
+                                                              **kwargs)
 
     @mock.patch.object(utils, 'print_list')
     def test_do_node_list(self, mock_print):
@@ -1129,11 +1123,11 @@ class ShellTest(testtools.TestCase):
 
         sh.do_node_delete(service, args)
 
-        service.delete_node.assert_called_once_with('node1', True)
+        service.delete_node.assert_called_once_with('node1', False)
 
     def test_do_node_delete_not_found(self):
         service = mock.Mock()
-        ex = exc.HTTPNotFound
+        ex = oexc.ResourceNotFound
         service.delete_node.side_effect = ex
 
         args = self._make_args({'id': ['node1']})
@@ -1220,7 +1214,7 @@ class ShellTest(testtools.TestCase):
         args = self._make_args({'id': 'FAKE'})
         # event not found
         ex = exc.CommandError
-        service.get_event.side_effect = exc.HTTPNotFound
+        service.get_event.side_effect = oexc.ResourceNotFound
         ex = self.assertRaises(ex,
                                sh.do_event_show,
                                service, args)
@@ -1269,6 +1263,8 @@ class ShellTest(testtools.TestCase):
             'outputs': utils.json_formatter,
             'metadata': utils.json_formatter,
             'data': utils.json_formatter,
+            'depends_on': utils.list_formatter,
+            'depended_by': utils.list_formatter,
         }
         sh.do_action_show(service, args)
         service.get_action.assert_called_once_with('action_id')
@@ -1279,9 +1275,9 @@ class ShellTest(testtools.TestCase):
         service = mock.Mock()
         args = self._make_args({'id': 'fake_id'})
 
-        service.get_action.side_effect = exc.HTTPNotFound
+        service.get_action.side_effect = oexc.ResourceNotFound
         ex = self.assertRaises(exc.CommandError,
                                sh.do_action_show,
                                service, args)
-        msg = _('Action fake_id is not found')
+        msg = _('Action not found: fake_id')
         self.assertEqual(msg, six.text_type(ex))
