@@ -1,3 +1,9 @@
+python-senlinclient (0.4.0-1) experimental; urgency=medium
+
+  * New upstream release.
+
+ -- Thomas Goirand <zigo@debian.org>  Mon, 21 Mar 2016 13:46:26 +0100
+
 python-senlinclient (0.3.0-1) experimental; urgency=medium
 
   [ David Della Vecchia ]
