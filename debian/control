@@ -59,7 +59,7 @@ Build-Depends-Indep: git,
                      python3-yaml,
                      subunit,
                      testrepository,
-Standards-Version: 3.9.7
+Standards-Version: 3.9.8
 Vcs-Browser: https://anonscm.debian.org/cgit/openstack/python-senlinclient.git/
 Vcs-Git: https://anonscm.debian.org/git/openstack/python-senlinclient.git
 Homepage: https://github.com/openstack/python-senlinclient
