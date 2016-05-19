@@ -1,6 +1,6 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: python-senlinclient
-Source: git://github.com/openstack/python-senlinclient.git
+Source: https://github.com/openstack/python-senlinclient
 
 Files: *
 Copyright: (c) 2013-2016, OpenStack Foundation <openstack-dev@lists.openstack.org>
