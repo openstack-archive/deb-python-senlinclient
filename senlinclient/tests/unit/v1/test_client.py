@@ -304,6 +304,23 @@ class ClientTest(testtools.TestCase):
         self.service.cluster_update_policy.assert_called_once_with(
             'FOO', 'BAR', foo='bar')
 
+    def test_check_cluster(self, mock_conn):
+        mock_conn.return_value = self.conn
+        sc = client.Client()
+
+        res = sc.check_cluster('FAKE_CLUSTER_ID')
+        self.assertEqual(self.service.check_cluster.return_value, res)
+        self.service.check_cluster.assert_called_once_with('FAKE_CLUSTER_ID')
+
+    def test_recover_cluster(self, mock_conn):
+        mock_conn.return_value = self.conn
+        sc = client.Client()
+
+        res = sc.recover_cluster('FAKE_CLUSTER_ID')
+        self.assertEqual(self.service.recover_cluster.return_value, res)
+        self.service.recover_cluster.assert_called_once_with(
+            'FAKE_CLUSTER_ID')
+
     def test_nodes(self, mock_conn):
         mock_conn.return_value = self.conn
         sc = client.Client()
@@ -355,6 +372,23 @@ class ClientTest(testtools.TestCase):
         self.assertEqual(self.service.delete_node.return_value, res)
         self.service.delete_node.assert_called_once_with(
             'FAKE_ID', True)
+
+    def test_check_node(self, mock_conn):
+        mock_conn.return_value = self.conn
+        sc = client.Client()
+
+        res = sc.check_node('FAKE_ID')
+        self.assertEqual(self.service.check_node.return_value, res)
+        self.service.check_node.assert_called_once_with('FAKE_ID')
+
+    def test_recover_node(self, mock_conn):
+        mock_conn.return_value = self.conn
+        sc = client.Client()
+
+        res = sc.recover_node('FAKE_ID')
+        self.assertEqual(self.service.recover_node.return_value, res)
+        self.service.recover_node.assert_called_once_with(
+            'FAKE_ID')
 
     def test_delete_node_ignore_missing(self, mock_conn):
         mock_conn.return_value = self.conn

@@ -776,6 +776,26 @@ def do_cluster_policy_update(service, args):
     print('Request accepted by action: %s' % resp['action'])
 
 
+@utils.arg('id', metavar='<CLUSTER>', nargs='+',
+           help=_('ID or name of cluster(s) to operate on.'))
+def do_cluster_check(service, args):
+    """Check the cluster(s)."""
+    for cid in args.id:
+        resp = service.check_cluster(cid)
+        print('Cluster check request on cluster %(cid)s is accepted by '
+              'action %(action)s.' % {'cid': cid, 'action': resp['action']})
+
+
+@utils.arg('id', metavar='<CLUSTER>', nargs='+',
+           help=_('ID or name of cluster(s) to operate on.'))
+def do_cluster_recover(service, args):
+    """Recover the cluster(s)."""
+    for cid in args.id:
+        resp = service.recover_cluster(cid)
+        print('Cluster recover request on cluster %(cid)s is accepted by '
+              'action %(action)s.' % {'cid': cid, 'action': resp['action']})
+
+
 # NODES
 
 
@@ -940,6 +960,42 @@ def do_node_update(service, args):
     _show_node(service, node.id)
 
 
+@utils.arg('id', metavar='<NODE>', nargs='+',
+           help=_('ID of node(s) to check.'))
+def do_node_check(service, args):
+    """Check the node(s)."""
+    failure_count = 0
+
+    for nid in args.id:
+        try:
+            service.check_node(nid)
+        except exc.HTTPNotFound:
+            failure_count += 1
+            print('Node id "%s" not found' % nid)
+    if failure_count > 0:
+        msg = _('Failed to check some of the specified nodes.')
+        raise exc.CommandError(msg)
+    print('Request accepted')
+
+
+@utils.arg('id', metavar='<NODE>', nargs='+',
+           help=_('ID of node(s) to recover.'))
+def do_node_recover(service, args):
+    """Recover the node(s)."""
+    failure_count = 0
+
+    for nid in args.id:
+        try:
+            service.recover_node(nid)
+        except exc.HTTPNotFound:
+            failure_count += 1
+            print('Node id "%s" not found' % nid)
+    if failure_count > 0:
+        msg = _('Failed to recover some of the specified nodes.')
+        raise exc.CommandError(msg)
+    print('Request accepted')
+
+
 # RECEIVERS
 
 
@@ -1092,15 +1148,13 @@ def do_event_list(service, args):
     if args.filters:
         queries.update(utils.format_parameters(args.filters))
 
-    sortby_index = None if args.sort else 0
     formatters = {}
     if not args.full_id:
         formatters['id'] = lambda x: x.id[:8]
         formatters['obj_id'] = lambda x: x.obj_id[:8] if x.obj_id else ''
 
     events = service.events(**queries)
-    utils.print_list(events, fields, formatters=formatters,
-                     sortby_index=sortby_index)
+    utils.print_list(events, fields, formatters=formatters)
 
 
 @utils.arg('id', metavar='<EVENT>',

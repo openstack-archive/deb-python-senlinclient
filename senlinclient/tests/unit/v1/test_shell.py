@@ -1029,6 +1029,25 @@ class ShellTest(testtools.TestCase):
         service.cluster_update_policy.assert_called_once_with('C1', 'policy1',
                                                               **kwargs)
 
+    def test_do_cluster_check(self):
+        service = mock.Mock()
+        args = self._make_args({'id': ['cluster1']})
+        service.check_cluster = mock.Mock()
+        service.check_cluster.return_value = {'action': 'action_id'}
+        sh.do_cluster_check(service, args)
+
+        service.check_cluster.assert_called_once_with('cluster1')
+
+    def test_do_cluster_recover(self):
+        service = mock.Mock()
+        args = self._make_args({'id': ['cluster1']})
+        service.recover_cluster = mock.Mock()
+        service.recover_cluster.return_value = {'action': 'action_id'}
+
+        sh.do_cluster_recover(service, args)
+
+        service.recover_cluster.assert_called_once_with('cluster1')
+
     @mock.patch.object(utils, 'print_list')
     def test_do_node_list(self, mock_print):
         service = mock.Mock()
@@ -1136,6 +1155,46 @@ class ShellTest(testtools.TestCase):
         msg = _('Failed to delete some of the specified nodes.')
         self.assertEqual(msg, six.text_type(ex))
 
+    def test_do_node_check(self):
+        service = mock.Mock()
+        args = self._make_args({'id': ['node1']})
+        service.check_node = mock.Mock()
+
+        sh.do_node_check(service, args)
+
+        service.check_node.assert_called_once_with('node1')
+
+    def test_do_node_check_not_found(self):
+        service = mock.Mock()
+        ex = exc.HTTPNotFound
+        service.check_node.side_effect = ex
+
+        args = self._make_args({'id': ['node1']})
+        ex = self.assertRaises(exc.CommandError,
+                               sh.do_node_check, service, args)
+        msg = _('Failed to check some of the specified nodes.')
+        self.assertEqual(msg, six.text_type(ex))
+
+    def test_do_node_recover(self):
+        service = mock.Mock()
+        args = self._make_args({'id': ['node1']})
+        service.check_node = mock.Mock()
+
+        sh.do_node_recover(service, args)
+
+        service.recover_node.assert_called_once_with('node1')
+
+    def test_do_node_recover_not_found(self):
+        service = mock.Mock()
+        ex = exc.HTTPNotFound
+        service.recover_node.side_effect = ex
+
+        args = self._make_args({'id': ['node1']})
+        ex = self.assertRaises(exc.CommandError,
+                               sh.do_node_recover, service, args)
+        msg = _('Failed to recover some of the specified nodes.')
+        self.assertEqual(msg, six.text_type(ex))
+
     @mock.patch.object(sh, '_show_node')
     def test_do_node_update(self, mock_show):
         service = mock.Mock()
@@ -1179,7 +1238,6 @@ class ShellTest(testtools.TestCase):
         del queries['filters']
         queries['action'] = 'NODE_DELETE'
         args = self._make_args(args)
-        sortby_index = None
         formatters = {}
         events = mock.Mock()
         service.events.return_value = events
@@ -1188,8 +1246,7 @@ class ShellTest(testtools.TestCase):
 
         service.events.assert_called_once_with(**queries)
         mock_print.assert_called_once_with(events, fields,
-                                           formatters=formatters,
-                                           sortby_index=sortby_index)
+                                           formatters=formatters)
 
     @mock.patch.object(utils, 'print_dict')
     def test_do_event_show(self, mock_print):

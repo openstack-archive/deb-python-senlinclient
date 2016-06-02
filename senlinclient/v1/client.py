@@ -113,6 +113,12 @@ class Client(object):
     def cluster_update_policy(self, cluster, policy, **attrs):
         return self.service.cluster_update_policy(cluster, policy, **attrs)
 
+    def check_cluster(self, cluster, **params):
+        return self.service.check_cluster(cluster, **params)
+
+    def recover_cluster(self, cluster, **params):
+        return self.service.recover_cluster(cluster, **params)
+
     def nodes(self, **queries):
         return self.service.nodes(**queries)
 
@@ -127,6 +133,12 @@ class Client(object):
 
     def delete_node(self, node, ignore_missing=True):
         return self.service.delete_node(node, ignore_missing)
+
+    def check_node(self, node, **params):
+        return self.service.check_node(node, **params)
+
+    def recover_node(self, node, **params):
+        return self.service.recover_node(node, **params)
 
     def receivers(self, **queries):
         return self.service.receivers(**queries)
