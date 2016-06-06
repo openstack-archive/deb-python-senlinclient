@@ -1,4 +1,4 @@
-python-senlinclient (0.4.1-1) UNRELEASED; urgency=medium
+python-senlinclient (0.4.1-1) experimental; urgency=medium
 
   [ Ondřej Nový ]
   * Standards-Version is 3.9.8 now (no change)
@@ -9,7 +9,10 @@ python-senlinclient (0.4.1-1) UNRELEASED; urgency=medium
   * New upstream release.
   * d/gbp.conf: Update branch for Newton.
 
- -- Corey Bryant <corey.bryant@canonical.com>  Thu, 02 Jun 2016 16:40:54 -0400
+  [ Thomas Goirand ]
+  * Added Corey Bryant <corey.bryant@canonical.com> as Uploaders:.
+
+ -- Thomas Goirand <zigo@debian.org>  Mon, 06 Jun 2016 10:30:09 +0000
 
 python-senlinclient (0.4.0-1) experimental; urgency=medium
 
