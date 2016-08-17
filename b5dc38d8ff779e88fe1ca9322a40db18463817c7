@@ -1,0 +1,8 @@
+Code-Review+2: Yanyan Hu <yanyanhu@cn.ibm.com>
+Workflow+1: Yanyan Hu <yanyanhu@cn.ibm.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 28 Jun 2016 05:01:50 +0000
+Reviewed-on: https://review.openstack.org/333163
+Project: openstack/deb-python-senlinclient
+Branch: refs/heads/master
