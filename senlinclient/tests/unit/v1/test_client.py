@@ -33,16 +33,17 @@ class ClientTest(testtools.TestCase):
 
         self.assertEqual(self.conn, sc.conn)
         self.assertEqual(self.service, sc.service)
-        mock_conn.assert_called_once_with(None, None)
+        mock_conn.assert_called_once_with(prof=None, user_agent=None)
 
     def test_init_with_params(self, mock_conn):
         mock_conn.return_value = self.conn
 
-        sc = client.Client(preferences='FOO', user_agent='BAR', zoo='LARR')
+        sc = client.Client(prof='FOO', user_agent='BAR', zoo='LARR')
 
         self.assertEqual(self.conn, sc.conn)
         self.assertEqual(self.service, sc.service)
-        mock_conn.assert_called_once_with('FOO', 'BAR', zoo='LARR')
+        mock_conn.assert_called_once_with(prof='FOO', user_agent='BAR',
+                                          zoo='LARR')
 
     def test_profile_types(self, mock_conn):
         mock_conn.return_value = self.conn
@@ -335,16 +336,16 @@ class ClientTest(testtools.TestCase):
 
         res = sc.get_node('FOOBAR')
         self.assertEqual(self.service.get_node.return_value, res)
-        self.service.get_node.assert_called_once_with('FOOBAR', args=None)
+        self.service.get_node.assert_called_once_with('FOOBAR', details=False)
 
     def test_get_node_with_details(self, mock_conn):
         mock_conn.return_value = self.conn
         sc = client.Client()
 
-        res = sc.get_node('FOOBAR', args={'show_details': True})
+        res = sc.get_node('FOOBAR', details=True)
         self.assertEqual(self.service.get_node.return_value, res)
         self.service.get_node.assert_called_once_with(
-            'FOOBAR', args={'show_details': True})
+            'FOOBAR', details=True)
 
     def test_create_node(self, mock_conn):
         mock_conn.return_value = self.conn

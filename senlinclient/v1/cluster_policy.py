@@ -13,18 +13,15 @@
 """Clustering v1 cluster policy action implementations"""
 
 import logging
-import six
 
-from cliff import command
-from cliff import lister
-from cliff import show
-from openstackclient.common import utils
+from osc_lib.command import command
+from osc_lib import utils
 
 from senlinclient.common.i18n import _
 from senlinclient.common import utils as senlin_utils
 
 
-class ClusterPolicyList(lister.Lister):
+class ClusterPolicyList(command.Lister):
     """List policies from cluster."""
 
     log = logging.getLogger(__name__ + ".ClusterPolicyList")
@@ -66,7 +63,7 @@ class ClusterPolicyList(lister.Lister):
         self.log.debug("take_action(%s)", parsed_args)
         senlin_client = self.app.client_manager.clustering
 
-        columns = ['policy_id', 'policy_name', 'policy_type', 'enabled']
+        columns = ['policy_id', 'policy_name', 'policy_type', 'is_enabled']
         cluster = senlin_client.get_cluster(parsed_args.cluster)
         queries = {
             'sort': parsed_args.sort,
@@ -83,12 +80,13 @@ class ClusterPolicyList(lister.Lister):
             }
         return (
             columns,
-            (utils.get_item_properties(p, columns, formatters=formatters)
+            (utils.get_item_properties(p, columns,
+                                       formatters=formatters)
              for p in policies)
         )
 
 
-class ClusterPolicyShow(show.ShowOne):
+class ClusterPolicyShow(command.ShowOne):
     """Show a specific policy that is bound to the specified cluster."""
 
     log = logging.getLogger(__name__ + ".ClusterPolicyShow")
@@ -113,8 +111,9 @@ class ClusterPolicyShow(show.ShowOne):
         senlin_client = self.app.client_manager.clustering
         policy = senlin_client.get_cluster_policy(parsed_args.policy,
                                                   parsed_args.cluster)
-        columns = sorted(list(six.iterkeys(policy)))
-        return columns, utils.get_dict_properties(policy.to_dict(), columns)
+        data = policy.to_dict()
+        columns = sorted(data.keys())
+        return columns, utils.get_dict_properties(data, columns)
 
 
 class ClusterPolicyUpdate(command.Command):

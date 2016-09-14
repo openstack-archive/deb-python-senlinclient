@@ -13,22 +13,20 @@
 """Clustering v1 node action implementations"""
 
 import logging
-import six
 import sys
 
-from cliff import command
-from cliff import lister
-from cliff import show
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
-from openstackclient.common import utils
+from osc_lib.command import command
+from osc_lib import exceptions as exc
+from osc_lib import utils
+import six
 
 from senlinclient.common.i18n import _
 from senlinclient.common.i18n import _LI
 from senlinclient.common import utils as senlin_utils
 
 
-class ListNode(lister.Lister):
+class ListNode(command.Lister):
     """Show list of nodes."""
 
     log = logging.getLogger(__name__ + ".ListNode")
@@ -118,7 +116,7 @@ class ListNode(lister.Lister):
         )
 
 
-class ShowNode(show.ShowOne):
+class ShowNode(command.ShowOne):
     """Show detailed info about the specified node."""
 
     log = logging.getLogger(__name__ + ".ShowNode")
@@ -148,9 +146,8 @@ class ShowNode(show.ShowOne):
 def _show_node(senlin_client, node_id, show_details=False):
     """Show detailed info about the specified node."""
 
-    args = {'show_details': True} if show_details else None
     try:
-        node = senlin_client.get_node(node_id, args=args)
+        node = senlin_client.get_node(node_id, details=show_details)
     except sdk_exc.ResourceNotFound:
         raise exc.CommandError(_('Node not found: %s') % node_id)
 
@@ -158,28 +155,22 @@ def _show_node(senlin_client, node_id, show_details=False):
         'metadata': senlin_utils.json_formatter,
         'data': senlin_utils.json_formatter,
     }
-    if show_details and node:
+    data = node.to_dict()
+    if show_details and data['details']:
         formatters['details'] = senlin_utils.nested_dict_formatter(
-            list(node['details'].keys()), ['property', 'value'])
-
-    columns = sorted(list(six.iterkeys(node)))
-    return columns, utils.get_dict_properties(node.to_dict(), columns,
+            list(data['details'].keys()), ['property', 'value'])
+    columns = sorted(data.keys())
+    return columns, utils.get_dict_properties(data, columns,
                                               formatters=formatters)
 
 
-class CreateNode(show.ShowOne):
+class CreateNode(command.ShowOne):
     """Create the node."""
 
     log = logging.getLogger(__name__ + ".CreateNode")
 
     def get_parser(self, prog_name):
         parser = super(CreateNode, self).get_parser(prog_name)
-        parser.add_argument(
-            '--profile',
-            metavar='<profile>',
-            required=True,
-            help=_('Profile Id or Name used for this node')
-        )
         parser.add_argument(
             '--cluster',
             metavar='<cluster>',
@@ -197,6 +188,12 @@ class CreateNode(show.ShowOne):
                    'This can be specified multiple times, or once with '
                    'key-value pairs separated by a semicolon'),
             action='append'
+        )
+        parser.add_argument(
+            '--profile',
+            metavar='<profile>',
+            required=True,
+            help=_('Profile Id or Name used for this node')
         )
         parser.add_argument(
             'name',
@@ -221,7 +218,7 @@ class CreateNode(show.ShowOne):
         return _show_node(senlin_client, node.id)
 
 
-class UpdateNode(show.ShowOne):
+class UpdateNode(command.ShowOne):
     """Update the node."""
 
     log = logging.getLogger(__name__ + ".UpdateNode")
@@ -318,20 +315,16 @@ class DeleteNode(command.Command):
             self.log.info(_LI('Ctrl-d detected'))
             return
 
-        failure_count = 0
-
+        result = {}
         for nid in parsed_args.node:
             try:
-                senlin_client.delete_node(nid, False)
+                node = senlin_client.delete_node(nid, False)
+                result[nid] = ('OK', node.location.split('/')[-1])
             except Exception as ex:
-                failure_count += 1
-                print(ex)
-        if failure_count:
-            raise exc.CommandError(_('Failed to delete %(count)s of the '
-                                     '%(total)s specified node(s).') %
-                                   {'count': failure_count,
-                                   'total': len(parsed_args.node)})
-        print('Request accepted')
+                result[nid] = ('ERROR', six.text_type(ex))
+
+        for rid, res in result.items():
+            senlin_utils.print_action_result(rid, res)
 
 
 class CheckNode(command.Command):

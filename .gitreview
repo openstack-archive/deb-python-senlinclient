@@ -1,4 +1,5 @@
 [gerrit]
 host=review.openstack.org
 port=29418
-project=openstack/python-senlinclient.git
+project=openstack/deb-python-senlinclient.git
+defaultbranch=debian/newton

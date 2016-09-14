@@ -13,19 +13,17 @@
 """Clustering v1 event action implementations"""
 
 import logging
-import six
 
-from cliff import lister
-from cliff import show
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
-from openstackclient.common import utils
+from osc_lib.command import command
+from osc_lib import exceptions as exc
+from osc_lib import utils
 
 from senlinclient.common.i18n import _
 from senlinclient.common import utils as senlin_utils
 
 
-class ListEvent(lister.Lister):
+class ListEvent(command.Lister):
     """List events."""
 
     log = logging.getLogger(__name__ + ".ListEvent")
@@ -99,14 +97,13 @@ class ListEvent(lister.Lister):
             formatters['obj_id'] = lambda x: x[:8] if x else ''
 
         events = senlin_client.events(**queries)
-        return (
-            columns,
-            (utils.get_item_properties(e, columns, formatters=formatters)
-             for e in events)
-        )
+        return (columns,
+                (utils.get_item_properties(e.to_dict(), columns,
+                                           formatters=formatters)
+                 for e in events))
 
 
-class ShowEvent(show.ShowOne):
+class ShowEvent(command.ShowOne):
     """Describe the event."""
 
     log = logging.getLogger(__name__ + ".ShowEvent")
@@ -129,5 +126,6 @@ class ShowEvent(show.ShowOne):
         except sdk_exc.ResourceNotFound:
             raise exc.CommandError(_("Event not found: %s")
                                    % parsed_args.event)
-        columns = sorted(list(six.iterkeys(event)))
-        return columns, utils.get_dict_properties(event.to_dict(), columns)
+        data = event.to_dict()
+        columns = sorted(data.keys())
+        return columns, utils.get_dict_properties(data, columns)

@@ -15,19 +15,17 @@
 import logging
 import sys
 
-from cliff import command
-from cliff import lister
-from cliff import show
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
-from openstackclient.common import utils
+from osc_lib.command import command
+from osc_lib import exceptions as exc
+from osc_lib import utils
 
 from senlinclient.common.i18n import _
 from senlinclient.common.i18n import _LI
 from senlinclient.common import utils as senlin_utils
 
 
-class ListPolicy(lister.Lister):
+class ListPolicy(command.Lister):
     """List policies that meet the criteria."""
 
     log = logging.getLogger(__name__ + ".ListPolicy")
@@ -105,7 +103,7 @@ class ListPolicy(lister.Lister):
         )
 
 
-class ShowPolicy(show.ShowOne):
+class ShowPolicy(command.ShowOne):
     """Show the policy details."""
 
     log = logging.getLogger(__name__ + ".ShowPolicy")
@@ -151,7 +149,7 @@ def _show_policy(senlin_client, policy_id):
                                               formatters=formatters)
 
 
-class CreatePolicy(show.ShowOne):
+class CreatePolicy(command.ShowOne):
     """Create a policy."""
 
     log = logging.getLogger(__name__ + ".CreatePolicy")
@@ -185,7 +183,7 @@ class CreatePolicy(show.ShowOne):
         return _show_policy(senlin_client, policy.id)
 
 
-class UpdatePolicy(show.ShowOne):
+class UpdatePolicy(command.ShowOne):
     """Update a policy."""
 
     log = logging.getLogger(__name__ + ".UpdatePolicy")
@@ -271,3 +269,47 @@ class DeletePolicy(command.Command):
                                    {'count': failure_count,
                                    'total': len(parsed_args.policy)})
         print('Policy deleted: %s' % parsed_args.policy)
+
+
+class ValidatePolicy(command.ShowOne):
+    """Validate a policy."""
+
+    log = logging.getLogger(__name__ + ".ValidatePolicy")
+
+    def get_parser(self, prog_name):
+        parser = super(ValidatePolicy, self).get_parser(prog_name)
+        parser.add_argument(
+            '--spec-file',
+            metavar='<spec-file>',
+            required=True,
+            help=_('The spec file used to create the policy')
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug("take_action(%s)", parsed_args)
+
+        senlin_client = self.app.client_manager.clustering
+        spec = senlin_utils.get_spec_content(parsed_args.spec_file)
+        attrs = {
+            'spec': spec,
+        }
+
+        policy = senlin_client.validate_policy(**attrs)
+        formatters = {
+            'spec': senlin_utils.json_formatter
+        }
+        columns = [
+            'created_at',
+            'data',
+            'domain',
+            'id',
+            'name',
+            'project',
+            'spec',
+            'type',
+            'updated_at',
+            'user'
+        ]
+        return columns, utils.get_dict_properties(policy.to_dict(), columns,
+                                                  formatters=formatters)

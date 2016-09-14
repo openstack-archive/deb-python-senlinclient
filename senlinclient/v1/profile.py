@@ -15,19 +15,17 @@
 import logging
 import sys
 
-from cliff import command
-from cliff import lister
-from cliff import show
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
-from openstackclient.common import utils
+from osc_lib.command import command
+from osc_lib import exceptions as exc
+from osc_lib import utils
 
 from senlinclient.common.i18n import _
 from senlinclient.common.i18n import _LI
 from senlinclient.common import utils as senlin_utils
 
 
-class ShowProfile(show.ShowOne):
+class ShowProfile(command.ShowOne):
     """Show profile details."""
 
     log = logging.getLogger(__name__ + ".ShowProfile")
@@ -76,7 +74,7 @@ def _show_profile(senlin_client, profile_id):
                                                   formatters=formatters)
 
 
-class ListProfile(lister.Lister):
+class ListProfile(command.Lister):
     """List profiles that meet the criteria."""
 
     log = logging.getLogger(__name__ + ".ListProfile")
@@ -207,7 +205,7 @@ class DeleteProfile(command.Command):
         print('Profile deleted: %s' % parsed_args.profile)
 
 
-class CreateProfile(show.ShowOne):
+class CreateProfile(command.ShowOne):
     """Create a profile."""
 
     log = logging.getLogger(__name__ + ".CreateProfile")
@@ -215,18 +213,18 @@ class CreateProfile(show.ShowOne):
     def get_parser(self, prog_name):
         parser = super(CreateProfile, self).get_parser(prog_name)
         parser.add_argument(
-            '--spec-file',
-            metavar='<spec-file>',
-            required=True,
-            help=_('The spec file used to create the profile')
-        )
-        parser.add_argument(
             '--metadata',
             metavar='<key1=value1;key2=value2...>',
             help=_('Metadata values to be attached to the profile. '
                    'This can be specified multiple times, or once with '
                    'key-value pairs separated by a semicolon'),
             action='append'
+        )
+        parser.add_argument(
+            '--spec-file',
+            metavar='<spec-file>',
+            required=True,
+            help=_('The spec file used to create the profile')
         )
         parser.add_argument(
             'name',
@@ -264,7 +262,7 @@ class CreateProfile(show.ShowOne):
         return _show_profile(senlin_client, profile_id=profile.id)
 
 
-class UpdateProfile(show.ShowOne):
+class UpdateProfile(command.ShowOne):
     """Update a profile."""
 
     log = logging.getLogger(__name__ + ".UpdateProfile")
@@ -309,3 +307,65 @@ class UpdateProfile(show.ShowOne):
                                    parsed_args.profile)
         senlin_client.update_profile(profile.id, **params)
         return _show_profile(senlin_client, profile_id=profile.id)
+
+
+class ValidateProfile(command.ShowOne):
+    """Validate a profile."""
+
+    log = logging.getLogger(__name__ + ".ValidateProfile")
+
+    def get_parser(self, prog_name):
+        parser = super(ValidateProfile, self).get_parser(prog_name)
+        parser.add_argument(
+            '--spec-file',
+            metavar='<spec-file>',
+            required=True,
+            help=_('The spec file used to create the profile')
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug("take_action(%s)", parsed_args)
+        senlin_client = self.app.client_manager.clustering
+
+        spec = senlin_utils.get_spec_content(parsed_args.spec_file)
+        type_name = spec.get('type', None)
+        type_version = spec.get('version', None)
+        properties = spec.get('properties', None)
+        if type_name is None:
+            raise exc.CommandError(_("Missing 'type' key in spec file."))
+        if type_version is None:
+            raise exc.CommandError(_("Missing 'version' key in spec file."))
+        if properties is None:
+            raise exc.CommandError(_("Missing 'properties' key in spec file."))
+
+        if type_name == 'os.heat.stack':
+            stack_properties = senlin_utils.process_stack_spec(properties)
+            spec['properties'] = stack_properties
+
+        params = {
+            'spec': spec,
+        }
+
+        profile = senlin_client.validate_profile(**params)
+
+        formatters = {}
+        formatters['metadata'] = senlin_utils.json_formatter
+        formatters['spec'] = senlin_utils.nested_dict_formatter(
+            ['type', 'version', 'properties'],
+            ['property', 'value'])
+
+        columns = [
+            'created_at',
+            'domain',
+            'id',
+            'metadata',
+            'name',
+            'project',
+            'spec',
+            'type',
+            'updated_at',
+            'user'
+        ]
+        return columns, utils.get_dict_properties(profile.to_dict(), columns,
+                                                  formatters=formatters)

@@ -11,8 +11,13 @@
 # under the License.
 
 import logging
+import subprocess
+import threading
+import time
 
 from openstack import exceptions as sdk_exc
+import six
+
 from senlinclient.common import exc
 from senlinclient.common.i18n import _
 from senlinclient.common.i18n import _LW
@@ -22,11 +27,10 @@ logger = logging.getLogger(__name__)
 
 
 def show_deprecated(deprecated, recommended):
-    logger.warning(_LW('"%(old)s" is deprecated, '
-                       'please use "%(new)s" instead.'),
-                   {'old': deprecated,
-                    'new': recommended}
-                   )
+    logger.warning(
+        _LW('"%(old)s" is deprecated and will be removed by Apr 2017, '
+            'please use "%(new)s" instead.'),
+        {'old': deprecated, 'new': recommended})
 
 
 def do_build_info(service, args=None):
@@ -36,7 +40,7 @@ def do_build_info(service, args=None):
     :param args: Additional command line arguments, if any.
     """
     show_deprecated('senlin build-info', 'openstack cluster build info')
-    result = service.get_build_info()
+    result = service.get_build_info().to_dict()
 
     formatters = {
         'api': utils.json_formatter,
@@ -241,6 +245,44 @@ def do_profile_delete(service, args):
     print('Profile deleted: %s' % args.id)
 
 
+@utils.arg('-s', '--spec-file', metavar='<SPEC FILE>', required=True,
+           help=_('The spec file used to create the profile.'))
+def do_profile_validate(service, args):
+    """Validate a profile."""
+    show_deprecated('senlin profile-validate',
+                    'openstack cluster profile validate')
+    spec = utils.get_spec_content(args.spec_file)
+    type_name = spec.get('type', None)
+    type_version = spec.get('version', None)
+    properties = spec.get('properties', None)
+    if type_name is None:
+        raise exc.CommandError(_("Missing 'type' key in spec file."))
+    if type_version is None:
+        raise exc.CommandError(_("Missing 'version' key in spec file."))
+    if properties is None:
+        raise exc.CommandError(_("Missing 'properties' key in spec file."))
+
+    if type_name == 'os.heat.stack':
+        stack_properties = utils.process_stack_spec(properties)
+        spec['properties'] = stack_properties
+
+    params = {
+        'spec': spec,
+    }
+
+    profile = service.validate_profile(**params)
+
+    formatters = {
+        'metadata': utils.json_formatter,
+    }
+
+    formatters['spec'] = utils.nested_dict_formatter(
+        ['type', 'version', 'properties'],
+        ['property', 'value'])
+
+    utils.print_dict(profile.to_dict(), formatters=formatters)
+
+
 # POLICY TYPES
 
 
@@ -393,6 +435,24 @@ def do_policy_delete(service, args):
     print('Policy deleted: %s' % args.id)
 
 
+@utils.arg('-s', '--spec-file', metavar='<SPEC_FILE>', required=True,
+           help=_('The spec file used to create the policy.'))
+def do_policy_validate(service, args):
+    """VAlidate a policy spec."""
+    show_deprecated('senlin policy-validate',
+                    'openstack cluster policy validate')
+    spec = utils.get_spec_content(args.spec_file)
+    attrs = {
+        'spec': spec,
+    }
+
+    policy = service.validate_policy(**attrs)
+    formatters = {
+        'metadata': utils.json_formatter,
+        'spec': utils.json_formatter,
+    }
+    utils.print_dict(policy.to_dict(), formatters=formatters)
+
 # CLUSTERS
 
 
@@ -449,7 +509,7 @@ def _show_cluster(service, cluster_id):
 
     formatters = {
         'metadata': utils.json_formatter,
-        'nodes': utils.list_formatter,
+        'node_ids': utils.list_formatter,
     }
     utils.print_dict(cluster.to_dict(), formatters=formatters)
 
@@ -491,23 +551,201 @@ def do_cluster_create(service, args):
     _show_cluster(service, cluster.id)
 
 
+@utils.arg('-p', '--path', metavar='<PATH>',
+           help=_('A Json path string specifying the attribute to collect.'))
+@utils.arg('-L', '--list', default=False, action="store_true",
+           help=_('Print a full list that contains both node ids and '
+                  'attribute values instead of values only. Default is True.'))
+@utils.arg('-F', '--full-id', default=False, action="store_true",
+           help=_('Print full IDs in list.'))
+@utils.arg('id', metavar='<CLUSTER>',
+           help=_('Name or ID of cluster(s) to operate on.'))
+def do_cluster_collect(service, args):
+    """Collect attributes across a cluster."""
+    show_deprecated('senlin cluster-collect', 'openstack cluster collect')
+
+    attrs = service.collect_cluster_attrs(args.id, args.path)
+    if args.list:
+        fields = ['node_id', 'attr_value']
+        formatters = {
+            'attr_value': utils.json_formatter
+        }
+        if not args.full_id:
+            formatters['node_id'] = lambda x: x.node_id[:8]
+        utils.print_list(attrs, fields, formatters=formatters)
+    else:
+        for attr in attrs:
+            print(attr.attr_value)
+
+
 @utils.arg('id', metavar='<CLUSTER>', nargs='+',
            help=_('Name or ID of cluster(s) to delete.'))
 def do_cluster_delete(service, args):
     """Delete the cluster(s)."""
     show_deprecated('senlin cluster-delete', 'openstack cluster delete')
-    failure_count = 0
 
+    result = {}
     for cid in args.id:
         try:
-            service.delete_cluster(cid, False)
+            cluster = service.delete_cluster(cid, False)
+            result[cid] = ('OK', cluster.location.split('/')[-1])
         except Exception as ex:
-            failure_count += 1
-            print(ex)
-    if failure_count > 0:
-        msg = _('Failed to delete some of the specified clusters.')
-        raise exc.CommandError(msg)
-    print('Request accepted')
+            result[cid] = ('ERROR', six.text_type(ex))
+
+    for rid, res in result.items():
+        utils.print_action_result(rid, res)
+
+
+def _run_script(node_id, addr, net, addr_type, port, user, ipv6, identity_file,
+                script, options, output=None):
+    version = 6 if ipv6 else 4
+
+    # Select the network to use.
+    if net:
+        addresses = addr.get(net)
+        if not addresses:
+            output['status'] = _('FAILED')
+            output['reason'] = _("Node '%(node)s' is not attached to network "
+                                 "'%(net)s'.") % {'node': node_id, 'net': net}
+            return
+    else:
+        # network not specified
+        if len(addr) > 1:
+            output['status'] = _('FAILED')
+            output['reason'] = _("Node '%(node)s' is attached to more than "
+                                 "one network. Please pick the network to "
+                                 "use.") % {'node': node_id}
+            return
+        elif not addr:
+            output['status'] = _('FAILED')
+            output['reason'] = _("Node '%(node)s' is not attached to any "
+                                 "network.") % {'node': node_id}
+            return
+        else:
+            addresses = list(six.itervalues(addr))[0]
+
+    # Select the address in the selected network.
+    # If the extension is not present, we assume the address to be floating.
+    matching_addresses = []
+    for a in addresses:
+        a_type = a.get('OS-EXT-IPS:type', 'floating')
+        a_version = a.get('version')
+        if (a_version == version and a_type == addr_type):
+            matching_addresses.append(a.get('addr'))
+
+    if not matching_addresses:
+        output['status'] = _('FAILED')
+        output['reason'] = _("No address that would match network '%(net)s' "
+                             "and type '%(type)s' of IPv%(ver)s has been "
+                             "found for node '%(node)s'."
+                             ) % {'net': net, 'type': addr_type,
+                                  'ver': version, 'node': node_id}
+        return
+
+    if len(matching_addresses) > 1:
+        output['status'] = _('FAILED')
+        output['reason'] = _("More than one IPv%(ver)s %(type)s address "
+                             "found.") % {'ver': version, 'type': addr_type}
+        return
+
+    ip_address = str(matching_addresses[0])
+    identity = '-i %s' % identity_file if identity_file else ''
+
+    cmd = [
+        'ssh',
+        '-%d' % version,
+        '-p%d' % port,
+        identity,
+        options,
+        '%s@%s' % (user, ip_address),
+        '%s' % script
+    ]
+    logger.debug("%s" % cmd)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    (stdout, stderr) = proc.communicate()
+    while proc.returncode is None:
+        time.sleep(1)
+    if proc.returncode == 0:
+        output['status'] = _('SUCCEEDED (0)')
+        output['output'] = stdout
+        if stderr:
+            output['error'] = stderr
+    else:
+        output['status'] = _('FAILED (%d)') % proc.returncode
+        output['output'] = stdout
+        if stderr:
+            output['error'] = stderr
+
+
+@utils.arg("-p", "--port", metavar="<PORT>", type=int, default=22,
+           help=_("Optional flag to indicate the port to use (Default=22)."))
+@utils.arg("-t", "--address-type", type=str, default="floating",
+           help=_("Optional flag to indicate which IP type to use. Possible "
+                  "values includes 'fixed' and 'floating' (the Default)."))
+@utils.arg("-n", "--network", metavar='<NETWORK>', default='',
+           help=_('Network to use for the ssh.'))
+@utils.arg("-6", "--ipv6", action="store_true", default=False,
+           help=_("Optional flag to indicate whether to use an IPv6 address "
+                  "attached to a server. (Defaults to IPv4 address)"))
+@utils.arg("-u", "--user", metavar="<USER>", default="root",
+           help=_("Login to use."))
+@utils.arg("-i", "--identity-file",
+           help=_("Private key file, same as the '-i' option to the ssh "
+                  "command."))
+@utils.arg("-O", "--ssh-options", default="",
+           help=_("Extra options to pass to ssh. see: man ssh."))
+@utils.arg("-s", "--script", metavar="<FILE>", required=True,
+           help=_("Script file to run."))
+@utils.arg("id", metavar="<CLUSTER>",
+           help=_('Name or ID of the cluster.'))
+def do_cluster_run(service, args):
+    """Run shell scripts on all nodes of a cluster."""
+    if '@' in args.id:
+        user, cluster = args.id.split('@', 1)
+        args.user = user
+        args.cluster = cluster
+
+    try:
+        attributes = service.collect_cluster_attrs(args.id, 'details')
+    except sdk_exc.ResourceNotFound:
+        raise exc.CommandError(_("Cluster not found: %s") % args.id)
+
+    script = None
+    try:
+        f = open(args.script, 'r')
+        script = f.read()
+    except Exception:
+        raise exc.CommandError(_("Cound not open script file: %s") %
+                               args.script)
+
+    tasks = dict()
+    for attr in attributes:
+        node_id = attr.node_id
+        addr = attr.attr_value['addresses']
+
+        output = dict()
+        th = threading.Thread(
+            target=_run_script,
+            args=(node_id, addr, args.network, args.address_type, args.port,
+                  args.user, args.ipv6, args.identity_file,
+                  script, args.ssh_options),
+            kwargs={'output': output})
+        th.start()
+        tasks[th] = (node_id, output)
+
+    for t in tasks:
+        t.join()
+
+    for t in tasks:
+        node_id, result = tasks[t]
+        print("node: %s" % node_id)
+        print("status: %s" % result.get('status'))
+        if "reason" in result:
+            print("reason: %s" % result.get('reason'))
+        if "output" in result:
+            print("output:\n%s" % result.get('output'))
+        if "error" in result:
+            print("error:\n%s" % result.get('error'))
 
 
 @utils.arg('-p', '--profile', metavar='<PROFILE>',
@@ -624,7 +862,7 @@ def do_cluster_node_del(service, args):
 @utils.arg('-t', '--min-step', metavar='<MIN_STEP>', type=int,
            help=_('An integer specifying the number of nodes for adjustment '
                   'when <PERCENTAGE> is specified.'))
-@utils.arg('-s', '--strict',  action='store_true', default=False,
+@utils.arg('-s', '--strict', action='store_true', default=False,
            help=_('A boolean specifying whether the resize should be '
                   'performed on a best-effort basis when the new capacity '
                   'may go beyond size constraints.'))
@@ -659,7 +897,7 @@ def do_cluster_resize(service, args):
     if capacity is not None:
         if capacity < 0:
             raise exc.CommandError(_('Cluster capacity must be larger than '
-                                     ' or equal to zero.'))
+                                     'or equal to zero.'))
         action_args['adjustment_type'] = 'EXACT_CAPACITY'
         action_args['number'] = capacity
 
@@ -745,7 +983,7 @@ def do_cluster_policy_list(service, args):
     """List policies from cluster."""
     show_deprecated('senlin cluster-policy-list',
                     'openstack cluster policy binding list')
-    fields = ['policy_id', 'policy_name', 'policy_type', 'enabled']
+    fields = ['policy_id', 'policy_name', 'policy_type', 'is_enabled']
 
     cluster = service.get_cluster(args.id)
     queries = {
@@ -910,9 +1148,8 @@ def do_node_list(service, args):
 
 def _show_node(service, node_id, show_details=False):
     """Show detailed info about the specified node."""
-    args = {'show_details': True} if show_details else None
     try:
-        node = service.get_node(node_id, args=args)
+        node = service.get_node(node_id, details=show_details)
     except sdk_exc.ResourceNotFound:
         raise exc.CommandError(_('Node not found: %s') % node_id)
 
@@ -921,9 +1158,9 @@ def _show_node(service, node_id, show_details=False):
         'data': utils.json_formatter,
     }
     data = node.to_dict()
-    if show_details:
+    if show_details and data['details']:
         formatters['details'] = utils.nested_dict_formatter(
-            list(node['details'].keys()), ['property', 'value'])
+            list(data['details'].keys()), ['property', 'value'])
 
     utils.print_dict(data, formatters=formatters)
 
@@ -971,18 +1208,17 @@ def do_node_show(service, args):
 def do_node_delete(service, args):
     """Delete the node(s)."""
     show_deprecated('senlin node-delete', 'openstack cluster node delete')
-    failure_count = 0
 
+    result = {}
     for nid in args.id:
         try:
-            service.delete_node(nid, False)
+            node = service.delete_node(nid, False)
+            result[nid] = ('OK', node.location.split('/')[-1])
         except Exception as ex:
-            failure_count += 1
-            print(ex)
-    if failure_count > 0:
-        msg = _('Failed to delete some of the specified nodes.')
-        raise exc.CommandError(msg)
-    print('Request accepted')
+            result[nid] = ('ERROR', six.text_type(ex))
+
+    for rid, res in result.items():
+        utils.print_action_result(rid, res)
 
 
 @utils.arg('-n', '--name', metavar='<NAME>',
@@ -1130,10 +1366,12 @@ def do_receiver_show(service, args):
 
 @utils.arg('-t', '--type', metavar='<TYPE>', default='webhook',
            help=_('Type of the receiver to create.'))
-@utils.arg('-c', '--cluster', metavar='<CLUSTER>', required=True,
-           help=_('Targeted cluster for this receiver.'))
-@utils.arg('-a', '--action', metavar='<ACTION>', required=True,
-           help=_('Name or ID of the targeted action to be triggered.'))
+@utils.arg('-c', '--cluster', metavar='<CLUSTER>',
+           help=_('Targeted cluster for this receiver. Required if receiver '
+                  'type is webhook.'))
+@utils.arg('-a', '--action', metavar='<ACTION>',
+           help=_('Name or ID of the targeted action to be triggered. '
+                  'Required if receiver type is webhook.'))
 @utils.arg('-P', '--params', metavar='<KEY1=VALUE1;KEY2=VALUE2...>',
            help=_('A dictionary of parameters that will be passed to target '
                   'action when the receiver is triggered.'),
@@ -1144,6 +1382,12 @@ def do_receiver_create(service, args):
     """Create a receiver."""
     show_deprecated('senlin receiver-create',
                     'openstack cluster receiver create')
+
+    if args.type == 'webhook':
+        if (not args.cluster or not args.action):
+            msg = _('cluster and action parameters are required to create '
+                    'webhook type of receiver.')
+            raise exc.CommandError(msg)
 
     params = {
         'name': args.name,
@@ -1203,7 +1447,7 @@ def do_event_list(service, args):
     """List events."""
     show_deprecated('senlin event-list', 'openstack cluster event list')
     fields = ['id', 'timestamp', 'obj_type', 'obj_id', 'obj_name', 'action',
-              'status', 'status_reason', 'level']
+              'status', 'level', 'cluster_id']
     queries = {
         'sort': args.sort,
         'limit': args.limit,
@@ -1218,6 +1462,8 @@ def do_event_list(service, args):
     if not args.full_id:
         formatters['id'] = lambda x: x.id[:8]
         formatters['obj_id'] = lambda x: x.obj_id[:8] if x.obj_id else ''
+        formatters['cluster_id'] = (lambda x: x.cluster_id[:8]
+                                    if x.cluster_id else '')
 
     events = service.events(**queries)
     utils.print_list(events, fields, formatters=formatters)
@@ -1282,7 +1528,7 @@ def do_action_list(service, args):
         formatters['depended_by'] = f_depby
     else:
         formatters['id'] = lambda x: x.id[:8]
-        formatters['target'] = lambda x: x.target[:8]
+        formatters['target'] = lambda x: x.target_id[:8]
         f_depon = lambda x: '\n'.join(a[:8] for a in x.depends_on)
         f_depby = lambda x: '\n'.join(a[:8] for a in x.depended_by)
         formatters['depends_on'] = f_depon

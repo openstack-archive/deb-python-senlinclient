@@ -13,19 +13,24 @@
 import logging
 
 from openstack import connection
-from openstackclient.common import utils
+from openstack import profile
+from osc_lib import utils
 
 LOG = logging.getLogger(__name__)
 
 DEFAULT_CLUSTERING_API_VERSION = '1'
 API_VERSION_OPTION = 'os_clustering_api_version'
 API_NAME = 'clustering'
+CURRENT_API_VERSION = '1.2'
 
 
 def make_client(instance):
     """Returns a clustering proxy"""
+    prof = profile.Profile()
+    prof.set_api_version(API_NAME, CURRENT_API_VERSION)
 
-    conn = connection.Connection(authenticator=instance.session.auth)
+    conn = connection.Connection(profile=prof,
+                                 authenticator=instance.session.auth)
     LOG.debug('Connection: %s', conn)
     LOG.debug('Clustering client initialized using OpenStackSDK: %s',
               conn.cluster)

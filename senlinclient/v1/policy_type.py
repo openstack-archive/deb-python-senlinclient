@@ -13,16 +13,16 @@
 """Clustering v1 policy type action implementations"""
 
 import logging
-import six
 
-from cliff import lister
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
+from osc_lib.command import command
+from osc_lib import exceptions as exc
+
 from senlinclient.common import format_utils
 from senlinclient.common.i18n import _
 
 
-class PolicyTypeList(lister.Lister):
+class PolicyTypeList(command.Lister):
     """List the available policy types."""
 
     log = logging.getLogger(__name__ + ".PolicyTypeList")
@@ -63,6 +63,7 @@ class PolicyTypeShow(format_utils.YamlFormat):
         except sdk_exc.ResourceNotFound:
             raise exc.CommandError(_('Policy Type not found: %s')
                                    % parsed_args.type_name)
-        rows = list(six.itervalues(res))
-        columns = list(six.iterkeys(res))
+        data = res.to_dict()
+        rows = data.values()
+        columns = data.keys()
         return columns, rows

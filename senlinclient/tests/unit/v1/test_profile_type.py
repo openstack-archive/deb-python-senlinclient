@@ -14,7 +14,7 @@ import mock
 
 from openstack.cluster.v1 import profile_type as sdk_profile_type
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
+from osc_lib import exceptions as exc
 
 from senlinclient.tests.unit.v1 import fakes
 from senlinclient.v1 import profile_type as osc_profile_type
@@ -29,18 +29,9 @@ class TestProfileType(fakes.TestClusteringv1):
 class TestProfileTypeList(TestProfileType):
     expected_columns = ['name']
     list_response = [
-        sdk_profile_type.ProfileType({'name': 'BBB',
-                                      'schema': {
-                                          'foo': 'bar'}}
-                                     ),
-        sdk_profile_type.ProfileType({'name': 'AAA',
-                                      'schema': {
-                                          'foo': 'bar'}}
-                                     ),
-        sdk_profile_type.ProfileType({'name': 'CCC',
-                                      'schema': {
-                                          'foo': 'bar'}}
-                                     ),
+        sdk_profile_type.ProfileType(name='BBB', schema={'foo': 'bar'}),
+        sdk_profile_type.ProfileType(name='AAA', schema={'foo': 'bar'}),
+        sdk_profile_type.ProfileType(name='CCC', schema={'foo': 'bar'}),
     ]
     expected_rows = [
         ['AAA'],
@@ -74,7 +65,7 @@ class TestProfileTypeShow(TestProfileType):
         super(TestProfileTypeShow, self).setUp()
         self.cmd = osc_profile_type.ProfileTypeShow(self.app, None)
         self.mock_client.get_profile_type = mock.Mock(
-            return_value=sdk_profile_type.ProfileType(self.response)
+            return_value=sdk_profile_type.ProfileType(**self.response)
         )
 
     def test_profile_type_show(self):

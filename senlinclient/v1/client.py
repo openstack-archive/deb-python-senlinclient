@@ -15,8 +15,9 @@ from senlinclient.common import sdk
 
 class Client(object):
 
-    def __init__(self, preferences=None, user_agent=None, **kwargs):
-        self.conn = sdk.create_connection(preferences, user_agent, **kwargs)
+    def __init__(self, prof=None, user_agent=None, **kwargs):
+        self.conn = sdk.create_connection(prof=prof, user_agent=user_agent,
+                                          **kwargs)
         self.service = self.conn.cluster
 
     ######################################################################
@@ -83,6 +84,14 @@ class Client(object):
         """
         return self.service.delete_profile(profile, ignore_missing)
 
+    def validate_profile(self, **attrs):
+        """Validate a profile spec
+
+        Doc link:
+        http://developer.openstack.org/api-ref-clustering-v1.html#validateProfile
+        """
+        return self.service.validate_profile(**attrs)
+
     def policy_types(self, **query):
         """List policy types
 
@@ -140,6 +149,14 @@ class Client(object):
         http://developer.openstack.org/api-ref-clustering-v1.html#deletePolicy
         """
         return self.service.delete_policy(policy, ignore_missing)
+
+    def validate_policy(self, **attrs):
+        """validate a policy spec
+
+        Doc link:
+        http://developer.openstack.org/api-ref-clustering-v1.html#validatePolicy
+        """
+        return self.service.validate_policy(**attrs)
 
     def clusters(self, **queries):
         """List clusters
@@ -263,6 +280,14 @@ class Client(object):
         """
         return self.service.cluster_update_policy(cluster, policy, **attrs)
 
+    def cluster_collect(self, cluster, path):
+        """Resize cluster
+
+        Doc link:
+        http://developer.openstack.org/api-ref-clustering-v1.html#clusterAction
+        """
+        return self.service.cluster_collect(cluster, path)
+
     def check_cluster(self, cluster, **params):
         """Check cluster's health status
 
@@ -295,13 +320,13 @@ class Client(object):
         """
         return self.service.create_node(**attrs)
 
-    def get_node(self, node, args=None):
+    def get_node(self, node, details=False):
         """Show node details
 
         Doc link:
         http://developer.openstack.org/api-ref-clustering-v1.html#showNode
         """
-        return self.service.get_node(node, args=args)
+        return self.service.get_node(node, details=details)
 
     def update_node(self, node, **attrs):
         """Update node

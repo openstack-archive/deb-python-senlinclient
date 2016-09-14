@@ -16,7 +16,7 @@ import six
 
 from openstack.cluster.v1 import policy as sdk_policy
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
+from osc_lib import exceptions as exc
 
 from senlinclient.tests.unit.v1 import fakes
 from senlinclient.v1 import policy as osc_policy
@@ -141,7 +141,7 @@ class TestPolicyList(TestPolicy):
 
 
 class TestPolicyShow(TestPolicy):
-    get_response = {"policy": {
+    response = {"policy": {
         "created_at": "2015-03-02T07:40:31",
         "data": {},
         "domain": 'null',
@@ -170,7 +170,7 @@ class TestPolicyShow(TestPolicy):
         super(TestPolicyShow, self).setUp()
         self.cmd = osc_policy.ShowPolicy(self.app, None)
         self.mock_client.get_policy = mock.Mock(
-            return_value=sdk_policy.Policy(attrs=self.get_response['policy']))
+            return_value=sdk_policy.Policy(**self.response['policy']))
 
     def test_policy_show(self):
         arglist = ['sp001']
@@ -230,9 +230,9 @@ class TestPolicyCreate(TestPolicy):
         super(TestPolicyCreate, self).setUp()
         self.cmd = osc_policy.CreatePolicy(self.app, None)
         self.mock_client.create_policy = mock.Mock(
-            return_value=sdk_policy.Policy(attrs=self.response['policy']))
+            return_value=sdk_policy.Policy(**self.response['policy']))
         self.mock_client.get_policy = mock.Mock(
-            return_value=sdk_policy.Policy(attrs=self.response['policy']))
+            return_value=sdk_policy.Policy(**self.response['policy']))
 
     def test_policy_create_defaults(self):
         arglist = ['my_policy', '--spec-file', self.spec_path]
@@ -274,11 +274,11 @@ class TestPolicyUpdate(TestPolicy):
         super(TestPolicyUpdate, self).setUp()
         self.cmd = osc_policy.UpdatePolicy(self.app, None)
         self.mock_client.update_policy = mock.Mock(
-            return_value=sdk_policy.Policy(attrs=self.response['policy']))
+            return_value=sdk_policy.Policy(**self.response['policy']))
         self.mock_client.get_policy = mock.Mock(
-            return_value=sdk_policy.Policy(attrs=self.response['policy']))
+            return_value=sdk_policy.Policy(**self.response['policy']))
         self.mock_client.find_policy = mock.Mock(
-            return_value=sdk_policy.Policy(attrs=self.response['policy']))
+            return_value=sdk_policy.Policy(**self.response['policy']))
 
     def test_policy_update_defaults(self):
         arglist = ['--name', 'new_policy', '9f779ddf']
@@ -368,3 +368,56 @@ class TestPolicyDelete(TestPolicy):
 
         mock_stdin.readline.assert_called_with()
         self.mock_client.delete_policy.assert_not_called()
+
+
+class TestPolicyValidate(TestPolicy):
+    spec_path = 'senlinclient/tests/test_specs/deletion_policy.yaml'
+    response = {"policy": {
+        "created_at": None,
+        "data": {},
+        "domain": 'null',
+        "id": None,
+        "name": "validated_policy",
+        "project": "5f1cc92b578e4e25a3b284179cf20a9b",
+        "spec": {
+            "description": "A policy for choosing victim node(s) from a "
+                           "cluster for deletion.",
+            "properties": {
+                "criteria": "OLDEST_FIRST",
+                "destroy_after_deletion": True,
+                "grace_period": 60,
+                "reduce_desired_capacity": False
+            },
+            "type": "senlin.policy.deletion",
+            "version": 1.0
+        },
+        "type": "senlin.policy.deletion-1.0",
+        "updated_at": 'null',
+        "user": "2d7aca950f3e465d8ef0c81720faf6ff"
+    }}
+    defaults = {
+        "spec": {
+            "version": 1,
+            "type": "senlin.policy.deletion",
+            "description": "A policy for choosing victim node(s) from a "
+                           "cluster for deletion.",
+            "properties": {
+                "destroy_after_deletion": True,
+                "grace_period": 60,
+                "reduce_desired_capacity": False,
+                "criteria": "OLDEST_FIRST"
+            }
+        }
+    }
+
+    def setUp(self):
+        super(TestPolicyValidate, self).setUp()
+        self.cmd = osc_policy.ValidatePolicy(self.app, None)
+        self.mock_client.validate_policy = mock.Mock(
+            return_value=sdk_policy.Policy(**self.response['policy']))
+
+    def test_policy_validate(self):
+        arglist = ['--spec-file', self.spec_path]
+        parsed_args = self.check_parser(self.cmd, arglist, [])
+        self.cmd.take_action(parsed_args)
+        self.mock_client.validate_policy.assert_called_with(**self.defaults)

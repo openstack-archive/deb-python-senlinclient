@@ -16,7 +16,7 @@ import six
 
 from openstack.cluster.v1 import node as sdk_node
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
+from osc_lib import exceptions as exc
 
 from senlinclient.tests.unit.v1 import fakes
 from senlinclient.v1 import node as osc_node
@@ -144,7 +144,7 @@ class TestNodeList(TestNode):
 
 
 class TestNodeShow(TestNode):
-    get_response = {"node": {
+    response = {"node": {
         "cluster_id": None,
         "created_at": "2015-02-10T12:03:16",
         "data": {},
@@ -171,20 +171,20 @@ class TestNodeShow(TestNode):
         super(TestNodeShow, self).setUp()
         self.cmd = osc_node.ShowNode(self.app, None)
         self.mock_client.get_node = mock.Mock(
-            return_value=sdk_node.Node(attrs=self.get_response['node']))
+            return_value=sdk_node.Node(**self.response['node']))
 
     def test_node_show(self):
         arglist = ['my_node']
         parsed_args = self.check_parser(self.cmd, arglist, [])
         self.cmd.take_action(parsed_args)
-        self.mock_client.get_node.assert_called_with('my_node', args=None)
+        self.mock_client.get_node.assert_called_with('my_node', details=False)
 
     def test_node_show_with_details(self):
         arglist = ['my_node', '--details']
         parsed_args = self.check_parser(self.cmd, arglist, [])
         self.cmd.take_action(parsed_args)
         self.mock_client.get_node.assert_called_with(
-            'my_node', args={'show_details': True})
+            'my_node', details=True)
 
     def test_node_show_not_found(self):
         arglist = ['my_node']
@@ -230,9 +230,9 @@ class TestNodeCreate(TestNode):
         super(TestNodeCreate, self).setUp()
         self.cmd = osc_node.CreateNode(self.app, None)
         self.mock_client.create_node = mock.Mock(
-            return_value=sdk_node.Node(attrs=self.response['node']))
+            return_value=sdk_node.Node(**self.response['node']))
         self.mock_client.get_node = mock.Mock(
-            return_value=sdk_node.Node(attrs=self.response['node']))
+            return_value=sdk_node.Node(**self.response['node']))
 
     def test_node_create_defaults(self):
         arglist = ['my_node', '--profile', 'mystack']
@@ -305,11 +305,11 @@ class TestNodeUpdate(TestNode):
         super(TestNodeUpdate, self).setUp()
         self.cmd = osc_node.UpdateNode(self.app, None)
         self.mock_client.update_node = mock.Mock(
-            return_value=sdk_node.Node(attrs=self.response['node']))
+            return_value=sdk_node.Node(**self.response['node']))
         self.mock_client.get_node = mock.Mock(
-            return_value=sdk_node.Node(attrs=self.response['node']))
+            return_value=sdk_node.Node(**self.response['node']))
         self.mock_client.find_node = mock.Mock(
-            return_value=sdk_node.Node(attrs=self.response['node']))
+            return_value=sdk_node.Node(**self.response['node']))
 
     def test_node_update_defaults(self):
         arglist = ['--name', 'new_node', '--metadata', 'nk1=nv1;nk2=nv2',
@@ -335,7 +335,8 @@ class TestNodeDelete(TestNode):
     def setUp(self):
         super(TestNodeDelete, self).setUp()
         self.cmd = osc_node.DeleteNode(self.app, None)
-        self.mock_client.delete_node = mock.Mock()
+        mock_node = mock.Mock(location='loc/fake_action_id')
+        self.mock_client.delete_node = mock.Mock(return_value=mock_node)
 
     def test_node_delete(self):
         arglist = ['node1', 'node2', 'node3']
@@ -359,10 +360,12 @@ class TestNodeDelete(TestNode):
         arglist = ['my_node']
         self.mock_client.delete_node.side_effect = sdk_exc.ResourceNotFound
         parsed_args = self.check_parser(self.cmd, arglist, [])
-        error = self.assertRaises(exc.CommandError, self.cmd.take_action,
-                                  parsed_args)
-        self.assertIn('Failed to delete 1 of the 1 specified node(s).',
-                      str(error))
+
+        self.cmd.take_action(parsed_args)
+
+        self.mock_client.delete_node.assert_has_calls(
+            [mock.call('my_node', False)]
+        )
 
     def test_node_delete_one_found_one_not_found(self):
         arglist = ['node1', 'node2']
@@ -370,13 +373,12 @@ class TestNodeDelete(TestNode):
             [None, sdk_exc.ResourceNotFound]
         )
         parsed_args = self.check_parser(self.cmd, arglist, [])
-        error = self.assertRaises(exc.CommandError,
-                                  self.cmd.take_action, parsed_args)
+
+        self.cmd.take_action(parsed_args)
+
         self.mock_client.delete_node.assert_has_calls(
             [mock.call('node1', False), mock.call('node2', False)]
         )
-        self.assertEqual('Failed to delete 1 of the 2 specified node(s).',
-                         str(error))
 
     @mock.patch('sys.stdin', spec=six.StringIO)
     def test_node_delete_prompt_yes(self, mock_stdin):

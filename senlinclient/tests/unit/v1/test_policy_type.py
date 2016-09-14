@@ -14,7 +14,7 @@ import mock
 
 from openstack.cluster.v1 import policy_type as sdk_policy_type
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
+from osc_lib import exceptions as exc
 
 from senlinclient.tests.unit.v1 import fakes
 from senlinclient.v1 import policy_type as osc_policy_type
@@ -29,15 +29,9 @@ class TestPolicyType(fakes.TestClusteringv1):
 class TestPolicyTypeList(TestPolicyType):
     expected_columns = ['name']
     list_response = [
-        sdk_policy_type.PolicyType({'name': 'BBB',
-                                    'schema': {
-                                        'foo': 'bar'}}),
-        sdk_policy_type.PolicyType({'name': 'AAA',
-                                    'schema': {
-                                        'foo': 'bar'}}),
-        sdk_policy_type.PolicyType({'name': 'CCC',
-                                    'schema': {
-                                        'foo': 'bar'}}),
+        sdk_policy_type.PolicyType(name='BBB', schema={'foo': 'bar'}),
+        sdk_policy_type.PolicyType(name='AAA', schema={'foo': 'bar'}),
+        sdk_policy_type.PolicyType(name='CCC', schema={'foo': 'bar'}),
     ]
     expected_rows = [
         ['AAA'],
@@ -71,7 +65,7 @@ class TestPolicyTypeShow(TestPolicyType):
         super(TestPolicyTypeShow, self).setUp()
         self.cmd = osc_policy_type.PolicyTypeShow(self.app, None)
         self.mock_client.get_policy_type = mock.Mock(
-            return_value=sdk_policy_type.PolicyType(self.response)
+            return_value=sdk_policy_type.PolicyType(**self.response)
         )
 
     def test_policy_type_show(self):

@@ -13,22 +13,23 @@
 """Clustering v1 cluster action implementations"""
 
 import logging
-import six
+import subprocess
 import sys
+import threading
+import time
 
-from cliff import command
-from cliff import lister
-from cliff import show
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
-from openstackclient.common import utils
+from osc_lib.command import command
+from osc_lib import exceptions as exc
+from osc_lib import utils
+import six
 
 from senlinclient.common.i18n import _
 from senlinclient.common.i18n import _LI
 from senlinclient.common import utils as senlin_utils
 
 
-class ListCluster(lister.Lister):
+class ListCluster(command.Lister):
     """List the user's clusters."""
 
     log = logging.getLogger(__name__ + ".ListCluster")
@@ -106,7 +107,7 @@ class ListCluster(lister.Lister):
         )
 
 
-class ShowCluster(show.ShowOne):
+class ShowCluster(command.ShowOne):
     """Show details of the cluster."""
 
     log = logging.getLogger(__name__ + ".ShowCluster")
@@ -135,26 +136,21 @@ def _show_cluster(senlin_client, cluster_id):
 
     formatters = {
         'metadata': senlin_utils.json_formatter,
-        'nodes': senlin_utils.list_formatter
+        'node_ids': senlin_utils.list_formatter
     }
-    columns = sorted(list(six.iterkeys(cluster)))
-    return columns, utils.get_dict_properties(cluster.to_dict(), columns,
+    data = cluster.to_dict()
+    columns = sorted(data.keys())
+    return columns, utils.get_dict_properties(data, columns,
                                               formatters=formatters)
 
 
-class CreateCluster(show.ShowOne):
+class CreateCluster(command.ShowOne):
     """Create the cluster."""
 
     log = logging.getLogger(__name__ + ".CreateCluster")
 
     def get_parser(self, prog_name):
         parser = super(CreateCluster, self).get_parser(prog_name)
-        parser.add_argument(
-            '--profile',
-            metavar='<profile>',
-            required=True,
-            help=_('Profile Id used for this cluster')
-        )
         parser.add_argument(
             '--min-size',
             metavar='<min-size>',
@@ -189,6 +185,12 @@ class CreateCluster(show.ShowOne):
             action='append'
         )
         parser.add_argument(
+            '--profile',
+            metavar='<profile>',
+            required=True,
+            help=_('Profile Id used for this cluster')
+        )
+        parser.add_argument(
             'name',
             metavar='<cluster-name>',
             help=_('Name of the cluster to create')
@@ -215,7 +217,7 @@ class CreateCluster(show.ShowOne):
         return _show_cluster(senlin_client, cluster.id)
 
 
-class UpdateCluster(show.ShowOne):
+class UpdateCluster(command.ShowOne):
     """Update the cluster."""
 
     log = logging.getLogger(__name__ + ".UpdateCluster")
@@ -309,20 +311,16 @@ class DeleteCluster(command.Command):
             self.log.info(_LI('Ctrl-d detected'))
             return
 
-        failure_count = 0
-
+        result = {}
         for cid in parsed_args.cluster:
             try:
-                senlin_client.delete_cluster(cid, False)
+                cluster = senlin_client.delete_cluster(cid, False)
+                result[cid] = ('OK', cluster.location.split('/')[-1])
             except Exception as ex:
-                failure_count += 1
-                print(ex)
-        if failure_count:
-            raise exc.CommandError(_('Failed to delete %(count)s of the '
-                                     '%(total)s specified cluster(s).') %
-                                   {'count': failure_count,
-                                   'total': len(parsed_args.cluster)})
-        print('Request accepted')
+                result[cid] = ('ERROR', six.text_type(ex))
+
+        for rid, res in result.items():
+            senlin_utils.print_action_result(rid, res)
 
 
 class ResizeCluster(command.Command):
@@ -404,11 +402,6 @@ class ResizeCluster(command.Command):
         if sum(v is not None for v in (capacity, adjustment, percentage)) > 1:
             raise exc.CommandError(_("Only one of 'capacity', 'adjustment' and"
                                      " 'percentage' can be specified."))
-
-        if sum(v is None for v in (capacity, adjustment, percentage)) == 3:
-            raise exc.CommandError(_("At least one of 'capacity', "
-                                     "'adjustment' and 'percentage' "
-                                     "should be specified."))
 
         action_args['adjustment_type'] = None
         action_args['number'] = None
@@ -528,17 +521,17 @@ class ClusterPolicyAttach(command.Command):
     def get_parser(self, prog_name):
         parser = super(ClusterPolicyAttach, self).get_parser(prog_name)
         parser.add_argument(
-            '--policy',
-            metavar='<policy>',
-            required=True,
-            help=_('ID or name of policy to be attached')
-        )
-        parser.add_argument(
             '--enabled',
             default=True,
             action="store_true",
             help=_('Whether the policy should be enabled once attached. '
                    'Default to True')
+        )
+        parser.add_argument(
+            '--policy',
+            metavar='<policy>',
+            required=True,
+            help=_('ID or name of policy to be attached')
         )
         parser.add_argument(
             'cluster',
@@ -589,7 +582,7 @@ class ClusterPolicyDetach(command.Command):
         print('Request accepted by action: %s' % resp['action'])
 
 
-class ClusterNodeList(lister.Lister):
+class ClusterNodeList(command.Lister):
     """List nodes from cluster."""
 
     log = logging.getLogger(__name__ + ".ClusterNodeList")
@@ -772,3 +765,246 @@ class RecoverCluster(command.Command):
             print('Cluster recover request on cluster %(cid)s is accepted by '
                   'action %(action)s.'
                   % {'cid': cid, 'action': resp['action']})
+
+
+class ClusterCollect(command.Lister):
+    """Recover the cluster(s)."""
+    log = logging.getLogger(__name__ + ".ClusterCollect")
+
+    def get_parser(self, prog_name):
+        parser = super(ClusterCollect, self).get_parser(prog_name)
+        parser.add_argument(
+            '--full-id',
+            default=False,
+            action="store_true",
+            help=_('Print full IDs in list')
+        )
+        parser.add_argument(
+            '--path',
+            metavar='<path>',
+            required=True,
+            help=_('JSON path expression for attribute to be collected')
+        )
+        parser.add_argument(
+            'cluster',
+            metavar='<cluster>',
+            help=_('ID or name of cluster(s) to operate on.')
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug("take_action(%s)", parsed_args)
+        senlin_client = self.app.client_manager.clustering
+        attrs = senlin_client.collect_cluster_attrs(parsed_args.cluster,
+                                                    parsed_args.path)
+        columns = ['node_id', 'attr_value']
+        formatters = {}
+        if not parsed_args.full_id:
+            formatters = {
+                'node_id': lambda x: x[:8]
+            }
+        return (columns,
+                (utils.get_item_properties(a, columns, formatters=formatters)
+                 for a in attrs))
+
+
+class ClusterRun(command.Command):
+    """Run scripts on cluster."""
+    log = logging.getLogger(__name__ + ".ClusterRun")
+
+    def get_parser(self, prog_name):
+        parser = super(ClusterRun, self).get_parser(prog_name)
+        parser.add_argument(
+            '--port',
+            metavar='<port>',
+            type=int,
+            default=22,
+            help=_('The TCP port to use for SSH connection')
+        )
+        parser.add_argument(
+            '--address-type',
+            metavar='<address_type>',
+            default='floating',
+            help=_("The type of IP address to use. Possible values include "
+                   "'fixed' and 'floating' (the default)")
+        )
+        parser.add_argument(
+            '--network',
+            metavar='<network>',
+            default='',
+            help=_("The network to use for SSH connection")
+        )
+        parser.add_argument(
+            '--ipv6',
+            action="store_true",
+            default=False,
+            help=_("Whether the IPv6 address should be used for SSH. Default "
+                   "to use IPv4 address.")
+        )
+        parser.add_argument(
+            '--user',
+            metavar='<user>',
+            default='root',
+            help=_("The login name to use for SSH connection. Default to "
+                   "'root'.")
+        )
+        parser.add_argument(
+            '--identity-file',
+            metavar='<identity_file>',
+            help=_("The private key file to use, same as the '-i' SSH option")
+        )
+        parser.add_argument(
+            '--ssh-options',
+            metavar='<ssh_options>',
+            default="",
+            help=_("Extra options to pass to SSH. See: man ssh.")
+        )
+        parser.add_argument(
+            '--script',
+            metavar='<script>',
+            required=True,
+            help=_("Path name of the script file to run")
+        )
+        parser.add_argument(
+            'cluster',
+            metavar='<cluster>',
+            help=_('ID or name of cluster(s) to operate on.')
+        )
+        return parser
+
+    def take_action(self, args):
+        self.log.debug("take_action(%s)", args)
+        service = self.app.client_manager.clustering
+
+        if '@' in args.cluster:
+            user, cluster = args.cluster.split('@', 1)
+            args.user = user
+            args.cluster = cluster
+
+        try:
+            attributes = service.collect_cluster_attrs(args.cluster, 'details')
+        except sdk_exc.ResourceNotFound:
+            raise exc.CommandError(_("Cluster not found: %s") % args.cluster)
+
+        script = None
+        try:
+            f = open(args.script, 'r')
+            script = f.read()
+        except Exception:
+            raise exc.CommandError(_("Cound not open script file: %s") %
+                                   args.script)
+
+        tasks = dict()
+        for attr in attributes:
+            node_id = attr.node_id
+            addr = attr.attr_value['addresses']
+
+            output = dict()
+            th = threading.Thread(
+                target=self._run_script,
+                args=(node_id, addr, args.network, args.address_type,
+                      args.port, args.user, args.ipv6, args.identity_file,
+                      script, args.ssh_options),
+                kwargs={'output': output})
+            th.start()
+            tasks[th] = (node_id, output)
+
+        for t in tasks:
+            t.join()
+
+        for t in tasks:
+            node_id, result = tasks[t]
+            print("node: %s" % node_id)
+            print("status: %s" % result.get('status'))
+            if "reason" in result:
+                print("reason: %s" % result.get('reason'))
+            if "output" in result:
+                print("output:\n%s" % result.get('output'))
+            if "error" in result:
+                print("error:\n%s" % result.get('error'))
+
+    def _run_script(self, node_id, addr, net, addr_type, port, user, ipv6,
+                    identity_file, script, options, output=None):
+        version = 6 if ipv6 else 4
+
+        # Select the network to use.
+        if net:
+            addresses = addr.get(net)
+            if not addresses:
+                output['status'] = _('FAILED')
+                output['error'] = _("Node '%(node)s' is not attached to "
+                                    "network '%(net)s'.") % {'node': node_id,
+                                                             'net': net}
+                return
+        else:
+            # network not specified
+            if len(addr) > 1:
+                output['status'] = _('FAILED')
+                output['error'] = _("Node '%(node)s' is attached to more "
+                                    "than one network. Please pick the "
+                                    "network to use.") % {'node': node_id}
+                return
+            elif not addr:
+                output['status'] = _('FAILED')
+                output['error'] = _("Node '%(node)s' is not attached to any "
+                                    "network.") % {'node': node_id}
+                return
+            else:
+                addresses = list(six.itervalues(addr))[0]
+
+        # Select the address in the selected network.
+        # If the extension is not present, we assume the address to be
+        # floating.
+        matching_addresses = []
+        for a in addresses:
+            a_type = a.get('OS-EXT-IPS:type', 'floating')
+            a_version = a.get('version')
+            if (a_version == version and a_type == addr_type):
+                matching_addresses.append(a.get('addr'))
+
+        if not matching_addresses:
+            output['status'] = _('FAILED')
+            output['error'] = _("No address that matches network '%(net)s' "
+                                "and type '%(type)s' of IPv%(ver)s has been "
+                                "found for node '%(node)s'."
+                                ) % {'net': net, 'type': addr_type,
+                                     'ver': version, 'node': node_id}
+            return
+
+        if len(matching_addresses) > 1:
+            output['status'] = _('FAILED')
+            output['error'] = _("More than one IPv%(ver)s %(type)s address "
+                                "found.") % {'ver': version,
+                                             'type': addr_type}
+            return
+
+        ip_address = str(matching_addresses[0])
+        identity = '-i %s' % identity_file if identity_file else ''
+
+        cmd = [
+            'ssh',
+            '-%d' % version,
+            '-p%d' % port,
+            identity,
+            options,
+            '%s@%s' % (user, ip_address),
+            '%s' % script
+        ]
+
+        self.log.debug("%s" % cmd)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        (stdout, stderr) = proc.communicate()
+
+        while proc.returncode is None:
+            time.sleep(1)
+
+        if proc.returncode == 0:
+            output['status'] = _('SUCCEEDED (0)')
+            output['output'] = stdout
+            if stderr:
+                output['error'] = stderr
+        else:
+            output['status'] = _('FAILED (%d)') % proc.returncode
+            output['output'] = stdout
+            if stderr:
+                output['error'] = stderr

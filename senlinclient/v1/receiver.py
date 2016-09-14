@@ -13,22 +13,19 @@
 """Clustering v1 receiver action implementations"""
 
 import logging
-import six
 import sys
 
-from cliff import command
-from cliff import lister
-from cliff import show
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
-from openstackclient.common import utils
+from osc_lib.command import command
+from osc_lib import exceptions as exc
+from osc_lib import utils
 
 from senlinclient.common.i18n import _
 from senlinclient.common.i18n import _LI
 from senlinclient.common import utils as senlin_utils
 
 
-class ListReceiver(lister.Lister):
+class ListReceiver(command.Lister):
     """List receivers that meet the criteria."""
 
     log = logging.getLogger(__name__ + ".ListReceiver")
@@ -110,7 +107,7 @@ class ListReceiver(lister.Lister):
         )
 
 
-class ShowReceiver(show.ShowOne):
+class ShowReceiver(command.ShowOne):
     """Show the receiver details."""
 
     log = logging.getLogger(__name__ + ".ShowReceiver")
@@ -142,12 +139,13 @@ def _show_receiver(senlin_client, receiver_id):
         'params': senlin_utils.json_formatter,
         'channel': senlin_utils.json_formatter,
     }
-    columns = sorted(list(six.iterkeys(receiver)))
-    return columns, utils.get_dict_properties(receiver.to_dict(), columns,
+    data = receiver.to_dict()
+    columns = sorted(data.keys())
+    return columns, utils.get_dict_properties(data, columns,
                                               formatters=formatters)
 
 
-class CreateReceiver(show.ShowOne):
+class CreateReceiver(command.ShowOne):
     """Create a receiver."""
 
     log = logging.getLogger(__name__ + ".CreateReceiver")
@@ -161,23 +159,23 @@ class CreateReceiver(show.ShowOne):
             help=_('Type of the receiver to create')
         )
         parser.add_argument(
-            '--cluster',
-            metavar='<cluster>',
-            required=True,
-            help=_('Targeted cluster for this receiver')
-        )
-        parser.add_argument(
-            '--action',
-            metavar='<action>',
-            required=True,
-            help=_('Name or ID of the targeted action to be triggered')
-        )
-        parser.add_argument(
             '--params',
             metavar='<key1=value1;key2=value2...>',
             help=_('A dictionary of parameters that will be passed to target '
                    'action when the receiver is triggered'),
             action='append'
+        )
+        parser.add_argument(
+            '--cluster',
+            metavar='<cluster>',
+            help=_('Targeted cluster for this receiver. Required if '
+                   'receiver type is webhook')
+        )
+        parser.add_argument(
+            '--action',
+            metavar='<action>',
+            help=_('Name or ID of the targeted action to be triggered. '
+                   'Required if receiver type is webhook')
         )
         parser.add_argument(
             'name',
@@ -188,6 +186,11 @@ class CreateReceiver(show.ShowOne):
 
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
+        if parsed_args.type == 'webhook':
+            if (not parsed_args.cluster or not parsed_args.action):
+                msg = _('cluster and action parameters are required to create '
+                        'webhook type of receiver.')
+                raise exc.CommandError(msg)
 
         senlin_client = self.app.client_manager.clustering
         params = {

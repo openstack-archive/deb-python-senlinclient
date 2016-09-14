@@ -13,15 +13,14 @@
 """Clustering v1 build_info action implementations"""
 
 import logging
-import six
 
-from cliff import show
-from openstackclient.common import utils
+from osc_lib.command import command
+from osc_lib import utils
 
 from senlinclient.common import utils as senlin_utils
 
 
-class BuildInfo(show.ShowOne):
+class BuildInfo(command.ShowOne):
     """Retrieve build information."""
 
     log = logging.getLogger(__name__ + ".BuildInfo")
@@ -40,6 +39,10 @@ class BuildInfo(show.ShowOne):
             'api': senlin_utils.json_formatter,
             'engine': senlin_utils.json_formatter,
         }
-        columns = sorted(list(six.iterkeys(result)))
-        return columns, utils.get_dict_properties(result.to_dict(), columns,
+        data = {
+            'api': result.api,
+            'engine': result.engine,
+        }
+        columns = ['api', 'engine']
+        return columns, utils.get_dict_properties(data, columns,
                                                   formatters=formatters)

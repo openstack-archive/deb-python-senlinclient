@@ -13,19 +13,17 @@
 """Clustering v1 action implementations"""
 
 import logging
-import six
 
-from cliff import lister
-from cliff import show
 from openstack import exceptions as sdk_exc
-from openstackclient.common import exceptions as exc
-from openstackclient.common import utils
+from osc_lib.command import command
+from osc_lib import exceptions as exc
+from osc_lib import utils
 
 from senlinclient.common.i18n import _
 from senlinclient.common import utils as senlin_utils
 
 
-class ListAction(lister.Lister):
+class ListAction(command.Lister):
     """List actions."""
 
     log = logging.getLogger(__name__ + ".ListAction")
@@ -104,12 +102,13 @@ class ListAction(lister.Lister):
 
         return (
             columns,
-            (utils.get_item_properties(a, columns, formatters=formatters)
+            (utils.get_item_properties(a.to_dict(), columns,
+                                       formatters=formatters)
              for a in actions)
         )
 
 
-class ShowAction(show.ShowOne):
+class ShowAction(command.ShowOne):
     """Show detailed info about the specified action."""
 
     log = logging.getLogger(__name__ + ".ShowAction")
@@ -141,6 +140,7 @@ class ShowAction(show.ShowOne):
             'depends_on': senlin_utils.list_formatter,
             'depended_by': senlin_utils.list_formatter,
         }
-        columns = sorted(list(six.iterkeys(action)))
-        return columns, utils.get_dict_properties(action.to_dict(), columns,
+        data = action.to_dict()
+        columns = sorted(data.keys())
+        return columns, utils.get_dict_properties(data, columns,
                                                   formatters=formatters)

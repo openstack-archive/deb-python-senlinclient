@@ -11,6 +11,8 @@
 # under the License.
 
 import copy
+import subprocess
+
 import mock
 import six
 import testtools
@@ -66,8 +68,9 @@ class ShellTest(testtools.TestCase):
             'api': utils.json_formatter,
             'engine': utils.json_formatter,
         }
-        mock_print.assert_called_once_with(result, formatters=formatters)
-        self.assertTrue(service.get_build_info.called)
+        mock_print.assert_called_once_with(result.to_dict(),
+                                           formatters=formatters)
+        service.get_build_info.assert_called_once_with()
 
     @mock.patch.object(utils, 'print_list')
     def test_do_profile_type_list(self, mock_print):
@@ -297,6 +300,48 @@ class ShellTest(testtools.TestCase):
         self.assertEqual(msg, six.text_type(ex))
         service.delete_profile.assert_called_with('profile2', False)
 
+    @mock.patch.object(utils, 'process_stack_spec')
+    @mock.patch.object(utils, 'get_spec_content')
+    def test_do_profile_validate(self, mock_get, mock_proc):
+        args = self._make_args({'spec_file': mock.Mock()})
+        spec = copy.deepcopy(self.profile_spec)
+        mock_get.return_value = spec
+        params = {
+            'spec': spec,
+        }
+        service = mock.Mock()
+        profile = mock.Mock()
+        profile.to_dict.return_value = {}
+        service.validate_profile.return_value = profile
+
+        sh.do_profile_validate(service, args)
+
+        service.validate_profile.assert_called_once_with(**params)
+
+        # Miss 'type' key in spec file
+        del spec['type']
+        ex = self.assertRaises(exc.CommandError,
+                               sh.do_profile_validate,
+                               service, args)
+        self.assertEqual(_("Missing 'type' key in spec file."),
+                         six.text_type(ex))
+        # Miss 'version' key in spec file
+        spec['type'] = 'os.heat.stack'
+        del spec['version']
+        ex = self.assertRaises(exc.CommandError,
+                               sh.do_profile_validate,
+                               service, args)
+        self.assertEqual(_("Missing 'version' key in spec file."),
+                         six.text_type(ex))
+        # Miss 'properties' key in spec file
+        spec['version'] = 1.0
+        del spec['properties']
+        ex = self.assertRaises(exc.CommandError,
+                               sh.do_profile_validate,
+                               service, args)
+        self.assertEqual(_("Missing 'properties' key in spec file."),
+                         six.text_type(ex))
+
     @mock.patch.object(utils, 'print_list')
     def test_do_policy_type_list(self, mock_print):
         service = mock.Mock()
@@ -425,7 +470,7 @@ class ShellTest(testtools.TestCase):
                                           receiver_id='receiver_id')
 
     @mock.patch.object(sh, '_show_receiver')
-    def test_do_receiver_create(self, mock_show):
+    def test_do_receiver_create_webhook(self, mock_show):
         service = mock.Mock()
         args = {
             'name': 'receiver1',
@@ -440,6 +485,47 @@ class ShellTest(testtools.TestCase):
             'type': 'webhook',
             'cluster_id': 'cluster1',
             'action': 'CLUSTER_SCALE_IN',
+            'params': {}
+        }
+        receiver = mock.Mock()
+        receiver.id = 'FAKE_ID'
+        service.create_receiver.return_value = receiver
+        sh.do_receiver_create(service, args)
+        service.create_receiver.assert_called_once_with(**params)
+        mock_show.assert_called_once_with(service, 'FAKE_ID')
+
+    def test_do_receiver_create_webhook_failed(self):
+        service = mock.Mock()
+        args = {
+            'name': 'receiver1',
+            'type': 'webhook',
+            'cluster': None,
+            'action': None,
+            'params': {}
+        }
+        args = self._make_args(args)
+        ex = self.assertRaises(exc.CommandError,
+                               sh.do_receiver_create, service, args)
+        msg = _("cluster and action parameters are required to create webhook"
+                " type of receiver.")
+        self.assertEqual(msg, six.text_type(ex))
+
+    @mock.patch.object(sh, '_show_receiver')
+    def test_do_receiver_create_non_webhook(self, mock_show):
+        service = mock.Mock()
+        args = {
+            'name': 'receiver1',
+            'type': 'foo',
+            'cluster': None,
+            'action': None,
+            'params': {}
+        }
+        args = self._make_args(args)
+        params = {
+            'name': 'receiver1',
+            'type': 'foo',
+            'cluster_id': None,
+            'action': None,
             'params': {}
         }
         receiver = mock.Mock()
@@ -598,6 +684,25 @@ class ShellTest(testtools.TestCase):
         msg = _("Failed to delete some of the specified policy(s).")
         self.assertEqual(msg, six.text_type(ex))
 
+    @mock.patch.object(utils, 'get_spec_content')
+    def test_do_policy_validate(self, mock_get):
+        service = mock.Mock()
+        spec = mock.Mock()
+        mock_get.return_value = spec
+        args = {
+            'spec_file': 'policy_file',
+        }
+        args = self._make_args({'spec_file': 'policy_file'})
+        attrs = {
+            'spec': spec,
+        }
+        policy = mock.Mock()
+        policy.to_dict.return_value = {}
+        service.validate_policy.return_value = policy
+        sh.do_policy_validate(service, args)
+        mock_get.assert_called_once_with(args.spec_file)
+        service.validate_policy.assert_called_once_with(**attrs)
+
     @mock.patch.object(utils, 'print_list')
     def test_do_cluster_list(self, mock_print):
         service = mock.Mock()
@@ -636,7 +741,7 @@ class ShellTest(testtools.TestCase):
         service.get_cluster.return_value = cluster
         formatters = {
             'metadata': utils.json_formatter,
-            'nodes': utils.list_formatter,
+            'node_ids': utils.list_formatter,
         }
         cluster_dict = mock.Mock()
         cluster.to_dict.return_value = cluster_dict
@@ -675,16 +780,174 @@ class ShellTest(testtools.TestCase):
         sh.do_cluster_delete(service, args)
         service.delete_cluster.assert_called_once_with('CID', False)
 
-    def test_do_cluster_delete_not_found(self):
-        service = mock.Mock()
-        args = {'id': ['cluster_id']}
-        args = self._make_args(args)
+    @mock.patch('subprocess.Popen')
+    def test__run_script(self, mock_proc):
+        x_proc = mock.Mock(returncode=0)
+        x_stdout = 'OUTPUT'
+        x_stderr = 'ERROR'
+        x_proc.communicate.return_value = (x_stdout, x_stderr)
+        mock_proc.return_value = x_proc
 
-        service.delete_cluster.side_effect = oexc.ResourceNotFound
-        ex = self.assertRaises(exc.CommandError,
-                               sh.do_cluster_delete, service, args)
-        msg = _('Failed to delete some of the specified clusters.')
-        self.assertEqual(msg, six.text_type(ex))
+        addr = {
+            'private': [
+                {
+                    'OS-EXT-IPS:type': 'floating',
+                    'version': 4,
+                    'addr': '1.2.3.4',
+                }
+            ]
+        }
+        output = {}
+
+        sh._run_script('NODE_ID', addr, 'private', 'floating', 22, 'john',
+                       False, 'identity_path', 'echo foo', '-f bar',
+                       output=output)
+        mock_proc.assert_called_once_with(
+            ['ssh', '-4', '-p22', '-i identity_path', '-f bar', 'john@1.2.3.4',
+             'echo foo'],
+            stdout=subprocess.PIPE)
+        self.assertEqual(
+            {'status': 'SUCCEEDED (0)', 'output': 'OUTPUT', 'error': 'ERROR'},
+            output)
+
+    def test__run_script_network_not_found(self):
+        addr = {'foo': 'bar'}
+        output = {}
+
+        sh._run_script('NODE_ID', addr, 'private', 'floating', 22, 'john',
+                       False, 'identity_path', 'echo foo', '-f bar',
+                       output=output)
+        self.assertEqual(
+            {'status': 'FAILED',
+             'reason': "Node 'NODE_ID' is not attached to network 'private'."
+             },
+            output)
+
+    def test__run_script_more_than_one_network(self):
+        addr = {'foo': 'bar', 'koo': 'tar'}
+        output = {}
+
+        sh._run_script('NODE_ID', addr, '', 'floating', 22, 'john',
+                       False, 'identity_path', 'echo foo', '-f bar',
+                       output=output)
+        self.assertEqual(
+            {'status': 'FAILED',
+             'reason': "Node 'NODE_ID' is attached to more than one "
+                       "network. Please pick the network to use."},
+            output)
+
+    def test__run_script_no_network(self):
+        addr = {}
+        output = {}
+
+        sh._run_script('NODE_ID', addr, '', 'floating', 22, 'john',
+                       False, 'identity_path', 'echo foo', '-f bar',
+                       output=output)
+
+        self.assertEqual(
+            {'status': 'FAILED',
+             'reason': "Node 'NODE_ID' is not attached to any network."},
+            output)
+
+    def test__run_script_no_matching_address(self):
+        addr = {
+            'private': [
+                {
+                    'OS-EXT-IPS:type': 'fixed',
+                    'version': 4,
+                    'addr': '1.2.3.4',
+                }
+            ]
+        }
+        output = {}
+
+        sh._run_script('NODE_ID', addr, 'private', 'floating', 22, 'john',
+                       False, 'identity_path', 'echo foo', '-f bar',
+                       output=output)
+        self.assertEqual(
+            {'status': 'FAILED',
+             'reason': "No address that would match network 'private' and "
+                       "type 'floating' of IPv4 has been found for node "
+                       "'NODE_ID'."},
+            output)
+
+    def test__run_script_more_than_one_address(self):
+        addr = {
+            'private': [
+                {
+                    'OS-EXT-IPS:type': 'fixed',
+                    'version': 4,
+                    'addr': '1.2.3.4',
+                },
+                {
+                    'OS-EXT-IPS:type': 'fixed',
+                    'version': 4,
+                    'addr': '5.6.7.8',
+                },
+            ]
+        }
+
+        output = {}
+
+        sh._run_script('NODE_ID', addr, 'private', 'fixed', 22, 'john',
+                       False, 'identity_path', 'echo foo', '-f bar',
+                       output=output)
+        self.assertEqual(
+            {'status': 'FAILED',
+             'reason': "More than one IPv4 fixed address found."},
+            output)
+
+    @mock.patch('threading.Thread')
+    @mock.patch.object(sh, '_run_script')
+    def test_do_cluster_run(self, mock_run, mock_thread):
+        service = mock.Mock()
+        args = {
+            'script': 'script_name',
+            'network': 'network_name',
+            'address_type': 'fixed',
+            'port': 22,
+            'user': 'root',
+            'ipv6': False,
+            'identity_file': 'identity_filename',
+            'ssh_options': '-f oo',
+        }
+        args = self._make_args(args)
+        args.id = 'CID'
+        addr1 = {'addresses': 'ADDR CONTENT 1'}
+        addr2 = {'addresses': 'ADDR CONTENT 2'}
+        attributes = [
+            mock.Mock(node_id='NODE1', attr_value=addr1),
+            mock.Mock(node_id='NODE2', attr_value=addr2)
+        ]
+        service.collect_cluster_attrs.return_value = attributes
+
+        th1 = mock.Mock()
+        th2 = mock.Mock()
+        mock_thread.side_effect = [th1, th2]
+        fake_script = 'blah blah'
+        with mock.patch('senlinclient.v1.shell.open',
+                        mock.mock_open(read_data=fake_script)) as mock_open:
+            sh.do_cluster_run(service, args)
+
+        service.collect_cluster_attrs.assert_called_once_with(
+            args.id, 'details')
+        mock_open.assert_called_once_with('script_name', 'r')
+        mock_thread.assert_has_calls([
+            mock.call(target=mock_run,
+                      args=('NODE1', 'ADDR CONTENT 1', 'network_name',
+                            'fixed', 22, 'root', False, 'identity_filename',
+                            'blah blah', '-f oo'),
+                      kwargs={'output': {}}),
+            mock.call(target=mock_run,
+                      args=('NODE2', 'ADDR CONTENT 2', 'network_name',
+                            'fixed', 22, 'root', False, 'identity_filename',
+                            'blah blah', '-f oo'),
+                      kwargs={'output': {}})
+        ])
+        th1.start.assert_called_once_with()
+        th2.start.assert_called_once_with()
+        th1.join.assert_called_once_with()
+        th2.join.assert_called_once_with()
 
     @mock.patch.object(sh, '_show_cluster')
     def test_do_cluster_update(self, mock_show):
@@ -819,7 +1082,7 @@ class ShellTest(testtools.TestCase):
                                sh.do_cluster_resize,
                                service, args)
         msg = _('Cluster capacity must be larger than '
-                ' or equal to zero.')
+                'or equal to zero.')
         self.assertEqual(msg, six.text_type(ex))
 
         # adjustment
@@ -947,7 +1210,7 @@ class ShellTest(testtools.TestCase):
 
     @mock.patch.object(utils, 'print_list')
     def test_do_cluster_policy_list(self, mock_print):
-        fields = ['policy_id', 'policy_name', 'policy_type', 'enabled']
+        fields = ['policy_id', 'policy_name', 'policy_type', 'is_enabled']
         service = mock.Mock()
         args = {
             'id': 'C1',
@@ -1056,6 +1319,65 @@ class ShellTest(testtools.TestCase):
 
         service.recover_cluster.assert_called_once_with('cluster1')
 
+    def test_do_cluster_collect(self):
+        service = mock.Mock()
+        args = self._make_args({
+            'path': 'path.to.attr',
+            'list': False,
+            'full_id': False,
+            'id': 'cluster1'
+        })
+        service.collect_cluster_attrs = mock.Mock(
+            return_value=[mock.Mock(node_id='FAKE1', attr_value='VALUE1')]
+        )
+
+        sh.do_cluster_collect(service, args)
+
+        service.collect_cluster_attrs.assert_called_once_with(
+            'cluster1', 'path.to.attr')
+
+    @mock.patch.object(utils, 'print_list')
+    def test_do_cluster_collect_as_list(self, mock_print):
+        service = mock.Mock()
+        args = self._make_args({
+            'path': 'path.to.attr',
+            'list': True,
+            'full_id': True,
+            'id': 'cluster1'
+        })
+        attrs = [mock.Mock(node_id='FAKE1', attr_value='VALUE1')]
+        fields = ['node_id', 'attr_value']
+        formatters = {'attr_value': utils.json_formatter}
+        service.collect_cluster_attrs = mock.Mock(return_value=attrs)
+
+        sh.do_cluster_collect(service, args)
+
+        service.collect_cluster_attrs.assert_called_once_with(
+            'cluster1', 'path.to.attr')
+        mock_print.assert_called_once_with(attrs, fields,
+                                           formatters=formatters)
+
+    @mock.patch.object(utils, 'print_list')
+    def test_do_cluster_collect_as_list_with_shortid(self, mock_print):
+        service = mock.Mock()
+        args = self._make_args({
+            'path': 'path.to.attr',
+            'list': True,
+            'full_id': False,
+            'id': 'cluster1'
+        })
+        attrs = [mock.Mock(node_id='FAKE1', attr_value='VALUE1')]
+        fields = ['node_id', 'attr_value']
+        formatters = {'node_id': mock.ANY, 'attr_value': utils.json_formatter}
+        service.collect_cluster_attrs = mock.Mock(return_value=attrs)
+
+        sh.do_cluster_collect(service, args)
+
+        service.collect_cluster_attrs.assert_called_once_with(
+            'cluster1', 'path.to.attr')
+        mock_print.assert_called_once_with(attrs, fields,
+                                           formatters=formatters)
+
     @mock.patch.object(utils, 'print_list')
     def test_do_node_list(self, mock_print):
         service = mock.Mock()
@@ -1104,7 +1426,7 @@ class ShellTest(testtools.TestCase):
 
         sh._show_node(service, node_id, show_details=False)
 
-        service.get_node.assert_called_once_with(node_id, args=None)
+        service.get_node.assert_called_once_with(node_id, details=False)
         mock_print.assert_called_once_with(data, formatters=formatters)
 
     @mock.patch.object(sh, '_show_node')
@@ -1151,17 +1473,6 @@ class ShellTest(testtools.TestCase):
         sh.do_node_delete(service, args)
 
         service.delete_node.assert_called_once_with('node1', False)
-
-    def test_do_node_delete_not_found(self):
-        service = mock.Mock()
-        ex = oexc.ResourceNotFound
-        service.delete_node.side_effect = ex
-
-        args = self._make_args({'id': ['node1']})
-        ex = self.assertRaises(exc.CommandError,
-                               sh.do_node_delete, service, args)
-        msg = _('Failed to delete some of the specified nodes.')
-        self.assertEqual(msg, six.text_type(ex))
 
     def test_do_node_check(self):
         service = mock.Mock()
@@ -1232,7 +1543,7 @@ class ShellTest(testtools.TestCase):
     def test_do_event_list(self, mock_print):
         service = mock.Mock()
         fields = ['id', 'timestamp', 'obj_type', 'obj_id', 'obj_name',
-                  'action', 'status', 'status_reason', 'level']
+                  'action', 'status', 'level', 'cluster_id']
         args = {
             'sort': 'timestamp:asc',
             'limit': 20,

@@ -80,6 +80,8 @@ def format_nested_dict(d, fields, column_names):
         value = d[field]
         if not isinstance(value, six.string_types):
             value = jsonutils.dumps(value, indent=2, ensure_ascii=False)
+        if value is None:
+            value = '-'
         pt.add_row([field, value.strip('"')])
 
     return pt.get_string()
@@ -129,14 +131,16 @@ def _print_list(objs, fields, formatters=None, sortby_index=0,
         row = []
         for field in fields:
             if field in formatters:
-                row.append(formatters[field](o))
+                data = formatters[field](o)
             else:
                 if field in mixed_case_fields:
                     field_name = field.replace(' ', '_')
                 else:
                     field_name = field.lower().replace(' ', '_')
                 data = getattr(o, field_name, '')
-                row.append(data)
+            if data is None:
+                data = '-'
+            row.append(data)
         pt.add_row(row)
 
     if six.PY3:
@@ -169,15 +173,26 @@ def print_dict(d, formatters=None):
 
     for field in d.keys():
         if field in formatters:
-            pt.add_row([field, formatters[field](d[field])])
+            data = formatters[field](d[field])
         else:
-            pt.add_row([field, d[field]])
+            data = d[field]
+        if data is None:
+            data = '-'
+        pt.add_row([field, data])
 
     content = pt.get_string(sortby='Property')
     if six.PY3:
         print(encodeutils.safe_encode(content).decode())
     else:
         print(encodeutils.safe_encode(content))
+
+
+def print_action_result(rid, res):
+    if res[0] == "OK":
+        output = _("accepted by action %s") % res[1]
+    else:
+        output = _("failed due to '%s'") % res[1]
+    print(_(" %(cid)s: %(output)s") % {"cid": rid, "output": output})
 
 
 def format_parameters(params, parse_semicolon=True):
@@ -240,7 +255,7 @@ def process_stack_spec(spec):
     new_spec = {
         # TODO(Qiming): add context support
         'disable_rollback': spec.get('disable_rollback', True),
-        'context':  spec.get('context', {}),
+        'context': spec.get('context', {}),
         'parameters': spec.get('parameters', {}),
         'timeout': spec.get('timeout', 60),
         'template': template,

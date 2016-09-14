@@ -181,8 +181,8 @@ class SenlinShell(object):
             raise exc.CommandError(msg)
 
         # project name or ID is needed, or else sdk may find the wrong project
-        if (not (args.project_id or args.project_name or args.tenant_id
-                 or args.tenant_name)):
+        if (not (args.project_id or args.project_name or args.tenant_id or
+                 args.tenant_name)):
             if not (args.user_id):
                 msg = _('Either project/tenant ID or project/tenant name '
                         'must be specified, or else Senlin cannot know '
@@ -209,9 +209,9 @@ class SenlinShell(object):
                     not (args.project_domain_id or args.project_domain_name)):
                 msg = _('Either project domain ID (--project-domain-id / '
                         'env[OS_PROJECT_DOMAIN_ID]) orr project domain name '
-                        '(--project-domain-name / env[OS_PROJECT_DOMAIN_NAME '
-                        'must be specified, because project/tenant name may '
-                        'not be unique.')
+                        '(--project-domain-name / '
+                        'env[OS_PROJECT_DOMAIN_NAME]) must be specified, '
+                        'because project/tenant name may not be unique.')
                 raise exc.CommandError(msg)
 
     def _setup_senlin_client(self, api_ver, args):
@@ -235,8 +235,7 @@ class SenlinShell(object):
             'trust_id': args.trust_id,
         }
 
-        return senlin_client.Client('1', args.user_preferences, USER_AGENT,
-                                    **kwargs)
+        return senlin_client.Client('1', user_agent=USER_AGENT, **kwargs)
 
     def main(self, argv):
         # Parse args once to find version
