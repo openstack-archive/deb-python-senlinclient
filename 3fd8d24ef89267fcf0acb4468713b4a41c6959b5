@@ -1,0 +1,8 @@
+Code-Review+2: XueFeng Liu <liu.xuefeng1@zte.com.cn>
+Workflow+1: XueFeng Liu <liu.xuefeng1@zte.com.cn>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Tue, 15 Nov 2016 09:35:03 +0000
+Reviewed-on: https://review.openstack.org/388509
+Project: openstack/deb-python-senlinclient
+Branch: refs/heads/master
