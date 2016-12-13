@@ -1,0 +1,10 @@
+Code-Review+2: Qiming Teng <tengqim@cn.ibm.com>
+Code-Review+2: XueFeng Liu <liu.xuefeng1@zte.com.cn>
+Code-Review+2: Ethan Lynn <xuanlangjian@gmail.com>
+Workflow+1: Ethan Lynn <xuanlangjian@gmail.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Mon, 12 Dec 2016 12:01:13 +0000
+Reviewed-on: https://review.openstack.org/407420
+Project: openstack/deb-python-senlinclient
+Branch: refs/heads/master
