@@ -1,8 +1,12 @@
-python-senlinclient (1.0.0-3) UNRELEASED; urgency=medium
+python-senlinclient (1.0.0-3) unstable; urgency=medium
 
+  [ Ondřej Nový ]
   * Bumped debhelper compat version to 10
 
- -- Ondřej Nový <onovy@debian.org>  Thu, 24 Nov 2016 00:11:41 +0100
+  [ Thomas Goirand ]
+  * Defines RES_OPTIONS=attempts:0 to avoid network access (Closes: #840731).
+
+ -- Thomas Goirand <zigo@debian.org>  Sun, 18 Dec 2016 11:29:42 +0100
 
 python-senlinclient (1.0.0-2) unstable; urgency=medium
 
