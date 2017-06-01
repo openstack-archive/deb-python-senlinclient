@@ -1,0 +1,8 @@
+Code-Review+2: Qiming Teng <tengqim@cn.ibm.com>
+Workflow+1: Qiming Teng <tengqim@cn.ibm.com>
+Verified+2: Jenkins
+Submitted-by: Jenkins
+Submitted-at: Thu, 01 Jun 2017 00:32:02 +0000
+Reviewed-on: https://review.openstack.org/466955
+Project: openstack/deb-python-senlinclient
+Branch: refs/heads/master
